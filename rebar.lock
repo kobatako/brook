@@ -1,0 +1,4 @@
+[{<<"procket">>,
+  {git,"git://github.com/msantos/procket.git",
+       {ref,"41e93841c519e37496a5e0f63a3761b36eec9a6a"}},
+  0}].
