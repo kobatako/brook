@@ -19,9 +19,9 @@
 
 start(_StartType, _StartArgs) ->
   {ok, IF} = inet:getifaddrs(),
-  Listen = lists:map(fun(Elm) -> interfaceList(Elm) end, IF),
+  Listen = lists:map(fun(Elm) -> interface_list(Elm) end, IF),
   Interface = ets:new(interface, [set, public, {keypos, #interface.name}, named_table]),
-  saveInterface(Listen, Interface),
+  save_interface(Listen, Interface),
   {ok, FD} = procket:open(0, [
     {protocol, ?ETH_P_ALL},
     {type, raw},
@@ -39,36 +39,36 @@ stop(_State) ->
 %% Internal functions
 %%====================================================================
 
-saveInterface([], _) ->
+save_interface([], _) ->
   true;
-saveInterface([Head| Tail], Interface) ->
+save_interface([Head| Tail], Interface) ->
   ets:insert_new(Interface, Head),
-  saveInterface(Tail, Interface).
+  save_interface(Tail, Interface).
 
 %%
 %% debug print interface
 %%
-printInterface(IF, Interface) ->
+print_interface(IF, Interface) ->
   case ets:next(Interface, IF) of
     '$end_of_table' ->
       true;
     Next ->
-      printInterface(Next, Interface)
+      print_interface(Next, Interface)
   end.
 
 %
 % interface list
 %
-interfaceList(Elm) ->
+interface_list(Elm) ->
   {Name, Opts} = Elm,
-  interfaceOpt(Opts, #interface{name=Name}).
+  interface_opt(Opts, #interface{name=Name}).
 
 %
 %
 %
-interfaceOpt([], Opt) ->
+interface_opt([], Opt) ->
   Opt;
-interfaceOpt([Head| Tail], Opt) ->
+interface_opt([Head| Tail], Opt) ->
   Res = case Head of
     {hwaddr, Hwaddr} ->
       Opt#interface{hw_addr=Hwaddr};
@@ -79,5 +79,5 @@ interfaceOpt([Head| Tail], Opt) ->
     _ ->
       Opt
   end,
-  interfaceOpt(Tail, Res).
+  interface_opt(Tail, Res).
 

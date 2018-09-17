@@ -26,13 +26,13 @@ init([FD]) ->
 % main loop
 loop(FD) ->
   {Result, Buf} = procket:recvfrom(FD, 4096),
-  if
-    Result == error ->
+  case Result of
+    error ->
       false;
-    Result == ok ->
+    ok ->
       gen_event:notify(receiver, Buf),
       true;
-    true ->
+    _ ->
       true
   end,
   loop(FD).
@@ -43,7 +43,7 @@ handle_event(Buf, Fd) ->
   <<S1, S2, S3, S4, S5, S6>> = <<SourceMacAddr:48>>,
   case ets:match(interface, {interface, '$1', '$2', '$3', [S1, S2, S3, S4, S5, S6]}) of
     [] ->
-      ethernetType(Type, Data);
+      ethernet_type(Type, Data);
     _ ->
       source_my_ip
   end,
@@ -57,14 +57,12 @@ terminate(_Arg, _State) ->
   ok.
 
 % ICMP Protocol
-ethernetType(?ICMP_TYPE, Data) ->
+ethernet_type(?ICMP_TYPE, Data) ->
   icmp:packet(Data);
 
 % ARP Protocol
-ethernetType(?ARP_TYPE, Data) ->
+ethernet_type(?ARP_TYPE, Data) ->
   arp:packet(Data);
-ethernetType(_, Data) ->
-  io:format("other packet~n"),
-  io:format("data : ~p~n", Data),
+ethernet_type(_, _) ->
   false.
 

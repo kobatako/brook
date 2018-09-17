@@ -33,7 +33,8 @@
 }).
 
 init() ->
-  ets:new(routing_table, [duplicate_bag, protected, {keypos, #routing_table.out_interface}, named_table]),
+  ets:new(routing_table, [duplicate_bag, protected,
+          {keypos, #routing_table.out_interface}, named_table]),
   IfList = ets:match(interface, {'$1', '$2', '$3', '$4', '$5'}),
   set_direct_routing_table(IfList, []).
 
@@ -51,7 +52,8 @@ get_dest_ip(DestIp) ->
 %%====================================================================
 
 get_dest_route(DestIp) ->
-  Routes = ets:match(routing_table, {'_', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9', '$10', '$11'}),
+  Routes = ets:match(routing_table,
+          {'_', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9', '$10', '$11'}),
   Match = match_to_dest_ip(Routes, DestIp, []),
   fetch_to_dest_route(Match, {}).
 
@@ -68,28 +70,33 @@ fetch_to_dest_route([{_, _, _, 0, _}=Route| _], _) ->
 % not set first routing
 fetch_to_dest_route([Route| Tail], {}) ->
   fetch_to_dest_route(Tail, Route);
-fetch_to_dest_route([{_, _, _, Ad, Metric}=Route| Tail], {_, _, _, Ad, NowMetric}=Now) ->
-  if
-    Metric > NowMetric ->
-      fetch_to_dest_route(Tail, Now);
-    true ->
-      fetch_to_dest_route(Tail, Route)
-  end;
-fetch_to_dest_route([{_, _, Subnet, Ad, Metric}=Route| Tail], {_, _, Subnet, NowAd, NowMetric}=Now) ->
-  if
-    Ad > NowAd ->
-      fetch_to_dest_route(Tail, Now);
-    Ad =:= NowAd, Metric > NowMetric ->
-      fetch_to_dest_route(Tail, Now);
-    true ->
-      fetch_to_dest_route(Tail, Route)
-  end.
+
+fetch_to_dest_route([{_, _, _, Ad, Metric}=Route| Tail],
+                    {_, _, _, Ad, NowMetric}=Now) when Metric > MowMetric ->
+  fetch_to_dest_route(Tail, Now);
+
+fetch_to_dest_route([{_, _, _, Ad, Metric}=Route| Tail],
+                    {_, _, _, Ad, NowMetric}=Now) ->
+  fetch_to_dest_route(Tail, Route);
+
+fetch_to_dest_route([{_, _, Subnet, Ad, Metric}=Route| Tail],
+                    {_, _, Subnet, NowAd, NowMetric}=Now) when AD > NowAd ->
+  fetch_to_dest_route(Tail, Now);
+
+fetch_to_dest_route([{_, _, Subnet, Ad, Metric}=Route| Tail],
+                    {_, _, Subnet, NowAd, NowMetric}=Now) when AD =:= NowAd; Metric > NowMetric ->
+  fetch_to_dest_route(Tail, Now);
+
+fetch_to_dest_route([{_, _, Subnet, Ad, Metric}=Route| Tail],
+                    {_, _, Subnet, NowAd, NowMetric}=Now) ->
+  fetch_to_dest_route(Tail, Route).
 
 % match to destination ip
 % match destination ip for routing table
 match_to_dest_ip([], _, List) ->
   List;
-match_to_dest_ip([[_, _, Ip, _, Subnetmask, Ad, Metric, Nexthop, _, If]| Tail], DestIp, List) when is_integer(DestIp) ->
+match_to_dest_ip([[_, _, Ip, _, Subnetmask, Ad, Metric, Nexthop, _, If]| Tail],
+                  DestIp, List) when is_integer(DestIp) ->
   case DestIp band Subnetmask of
     Ip ->
       match_to_dest_ip(Tail, DestIp, [{If, Nexthop, Subnetmask, Ad, Metric}|List]);
@@ -104,7 +111,8 @@ set_direct_routing_table([], List) ->
   List;
 set_direct_routing_table([[_, _, ?SELEF_IP, _, _]| Tail], List) ->
   set_direct_routing_table(Tail, List);
-set_direct_routing_table([[_, _, IP, Netmask, _]| Tail], List) when IP =:= undefined; Netmask =:= undefind ->
+set_direct_routing_table([[_, _, IP, Netmask, _]| Tail], List)
+                        when IP =:= undefined; Netmask =:= undefind ->
   set_direct_routing_table(Tail, List);
 set_direct_routing_table([[_, Name, {I1, I2, I3, I4}, {S1, S2, S3, S4}, _]| Tail], List) ->
   <<DestIp:32>> =  <<I1, I2, I3, I4>>,
@@ -128,8 +136,10 @@ set_direct_routing_table([[_, Name, {I1, I2, I3, I4}, {S1, S2, S3, S4}, _]| Tail
 %
 % set to routing table
 %
-set_to_routing_table(#routing_table{dest_route=Ip, subnetmask=Netmask} = RoutingTable) when Ip =:= undefined; Netmask =:= undefined ->
+set_to_routing_table(#routing_table{dest_route=Ip, subnetmask=Netmask} = RoutingTable)
+                    when Ip =:= undefined; Netmask =:= undefined ->
   false;
-set_to_routing_table(#routing_table{dest_route=Ip, subnetmask=Netmask} = RoutingTable) when is_tuple(Ip), is_tuple(Netmask) ->
+set_to_routing_table(#routing_table{dest_route=Ip, subnetmask=Netmask} = RoutingTable)
+                    when is_tuple(Ip), is_tuple(Netmask) ->
   ets: insert_new(routing_table, RoutingTable).
 
