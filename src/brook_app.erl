@@ -20,7 +20,6 @@
 start(_StartType, _StartArgs) ->
   {ok, IF} = inet:getifaddrs(),
   Listen = lists:map(fun(Elm) -> interfaceList(Elm) end, IF),
-  io:format("~p~n", [Listen]),
   Interface = ets:new(interface, [set, public, {keypos, #interface.name}, named_table]),
   saveInterface(Listen, Interface),
   {ok, FD} = procket:open(0, [
@@ -72,7 +71,7 @@ interfaceOpt([], Opt) ->
 interfaceOpt([Head| Tail], Opt) ->
   Res = case Head of
     {hwaddr, Hwaddr} ->
-      Opt#interface{hwaddr=Hwaddr};
+      Opt#interface{hw_addr=Hwaddr};
     {addr, Addr} ->
       Opt#interface{addr=Addr};
     {netmask, Netmask} ->

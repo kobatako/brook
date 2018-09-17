@@ -29,13 +29,6 @@ start_link(FD) ->
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([FD]) ->
     ChildSpecs = [
-      #{id => main,
-        start => {main, start_link, [FD]},
-        restart => permanent,
-        shutdown => brutal_kill,
-        type => worker,
-        modules => [main]
-      },
       #{id => packet_sender,
         start => {packet_sender, start_link, [[]]},
         restart => permanent,
@@ -44,6 +37,7 @@ init([FD]) ->
         modules => [packet_sender]
       }
     ],
+    packet_receiver:start_link(FD),
     % supervisor:start_child({gloabl, main}, ChildSpecs),
     {ok, { {one_for_one, 60, 3600}, ChildSpecs} }.
     % {ok, { {one_for_one, 60, 3600}, []} }.

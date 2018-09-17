@@ -1,6 +1,6 @@
 -record(interface, {
-	name,
-	addr,
-	netmask,
-	hwaddr
+  name,
+  addr,
+  netmask,
+  hw_addr
 }).
