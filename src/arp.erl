@@ -23,7 +23,7 @@
 
 init() ->
   io:format("~p~n", ["arp init"]),
-  arp_table = ets:new(arp_table, [set, protected, {keypos, #arp_table.dest_mac_addr}, named_table]).
+  arp_table = ets:new(arp_table, [set, public, {keypos, #arp_table.dest_mac_addr}, named_table]).
 
 get_mac_addr({If, Nexthop}) ->
   case ets:match(arp_table, {'_', '$1', Nexthop, '$2', '_'}) of
@@ -42,7 +42,13 @@ request_arp(If, Nexthop) ->
     [] ->
       false;
     [[SourceIp, SourceMacAddr]] ->
-      sender:arp_request(If, SourceMacAddr, SourceIp, Nexthop)
+      ARPHeader = arp:to_binary(#arpHeader{
+        hardwareType=?ETHERNET, protocol=16#0800, addressLen=16#06, protocolLen=16#04,
+        operationCode=16#0001,
+        sourceMacAddress=SourceMacAddr, sourceIPAddress=tuple_to_list(SourceIp),
+        destMacAddress=[16#00, 16#00, 16#00, 16#00, 16#00, 16#00], destIPAddress=tuple_to_list(Nexthop)
+      }),
+      gen_server:cast(packet_sender, {arp_request, {If, ARPHeader}})
   end.
 
 %
