@@ -22,7 +22,6 @@
 -export([init/0, get_mac_addr/1, packet/1, to_binary/1]).
 
 init() ->
-  io:format("~p~n", ["arp init"]),
   arp_table = ets:new(arp_table, [set, public, {keypos, #arp_table.dest_mac_addr}, named_table]).
 
 get_mac_addr({If, Nexthop}) ->
@@ -46,7 +45,8 @@ request_arp(If, Nexthop) ->
         hw_type=?ETHERNET, protocol=16#0800, address_len=16#06, protocol_len=16#04,
         operation_code=16#0001,
         source_mac_addr=SourceMacAddr, source_ip_addr=tuple_to_list(SourceIp),
-        dest_mac_addr=[16#00, 16#00, 16#00, 16#00, 16#00, 16#00], dest_ip_addr=tuple_to_list(Nexthop)
+        dest_mac_addr=[16#00, 16#00, 16#00, 16#00, 16#00, 16#00],
+        dest_ip_addr=tuple_to_list(Nexthop)
       }),
       gen_server:cast(packet_sender, {arp_request, {If, ARPHeader}})
   end.
@@ -54,16 +54,12 @@ request_arp(If, Nexthop) ->
 %
 % arp response packet
 %
-packet(<<?ETHERNET:16, Type:16, _, _, ?OPTION_RESPONSE:16, SourceMacAddr:48, SourceIp:32, DestMacAddr:48, DestIp:32, _/bitstring>>) ->
+packet(<<?ETHERNET:16, Type:16, _, _, ?OPTION_RESPONSE:16,
+          SourceMacAddr:48, SourceIp:32,
+          DestMacAddr:48, DestIp:32, _/bitstring>>) ->
   <<S1, S2, S3, S4>> = <<SourceIp:32>>,
   <<D1, D2, D3, D4>> = <<DestIp:32>>,
   <<SM1, SM2, SM3, SM4, SM5, SM6>> = <<SourceMacAddr:48>>,
-  io:format("~p~n", ["arp response"]),
-  io:format("type            ~p~n", [Type]),
-  io:format("source mac addr ~p~n", [<<SourceMacAddr:48>>]),
-  io:format("dest mac addr   ~p~n", [<<DestMacAddr:48>>]),
-  io:format("Dest     ~p.~p.~p.~p~n", [D1, D2, D3, D4]),
-  io:format("Source   ~p.~p.~p.~p~n", [S1, S2, S3, S4]),
   ets:insert_new(arp_table,
     #arp_table{source_ip_addr={D1, D2, D3, D4},
                 dest_ip_addr={S1, S2, S3, S4},

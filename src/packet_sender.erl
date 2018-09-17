@@ -41,7 +41,7 @@ init(_) ->
 handle_info(_Message, Storage) ->
   {noreply, Storage}.
 
-terminate(_message, _Storage) ->
+terminate(_Message, _Storage) ->
   ok.
 
 handle_call(?MODULE, _, _) ->
@@ -83,7 +83,7 @@ make_bind([[_, IfName, _, _, MacAddr]|Tail], Res) ->
     {family, packet},
     {interface, IfName}
   ]),
-  ok = packet:bind(FD, packet:ifindex(FD,IfName)),
+  ok = packet:bind(FD, packet:ifindex(FD, IfName)),
   erlang:open_port({fd, FD, FD}, [binary, stream]),
   make_bind(Tail, [#{if_name => IfName, fd => FD, mac_addr => MacAddr}| Res]).
 
@@ -91,7 +91,8 @@ make_bind([[_, IfName, _, _, MacAddr]|Tail], Res) ->
 %% @doc request arp
 %%
 arp_request(FD, HwAddr, ARPHeader) ->
-  Ethernet = ethernet_to_binary(#ethernet_header{source_mac_addr=HwAddr, dest_mac_addr=[16#ff, 16#ff, 16#ff, 16#ff, 16#ff, 16#ff], type=?TYPE_ARP}),
+  Ethernet = ethernet_to_binary(#ethernet_header{source_mac_addr=HwAddr,
+              dest_mac_addr=[16#ff, 16#ff, 16#ff, 16#ff, 16#ff, 16#ff], type=?TYPE_ARP}),
   request(FD, <<Ethernet/bitstring, ARPHeader/bitstring>>).
 
 %
