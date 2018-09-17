@@ -97,6 +97,9 @@ match_to_dest_ip([[_, _, Ip, _, Subnetmask, Ad, Metric, Nexthop, _, If]| Tail], 
       match_to_dest_ip(Tail, DestIp, List)
   end.
 
+%
+% set direct routing table
+%
 set_direct_routing_table([], List) ->
   List;
 set_direct_routing_table([[_, _, ?SELEF_IP, _, _]| Tail], List) ->
@@ -122,6 +125,9 @@ set_direct_routing_table([[_, Name, {I1, I2, I3, I4}, {S1, S2, S3, S4}, _]| Tail
   }),
   set_direct_routing_table(Tail, List).
 
+%
+% set to routing table
+%
 set_to_routing_table(#routing_table{dest_route=Ip, subnetmask=Netmask} = RoutingTable) when Ip =:= undefined; Netmask =:= undefined ->
   false;
 set_to_routing_table(#routing_table{dest_route=Ip, subnetmask=Netmask} = RoutingTable) when is_tuple(Ip), is_tuple(Netmask) ->

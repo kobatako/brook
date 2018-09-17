@@ -1,56 +1,8 @@
--module(main).
--behaviour(supervisor).
--define(PROFILER_ON, false).
+-module(icmp).
 
--ifdef (false).
--define(PROFILER_STOP(), fprof:trace([stop]), fprof:profile(), fprof:analyse([totals, {sort, own}, {dest, "fprof.analysis"}]), fprof:stop()).
--define(PROFILER_START(X), fprof:start(), fprof:trace([start, {procs, X}])).
--else.
--define(PROFILER_STOP(), []).
--define(PROFILER_START(X), []).
--endif.
+-export([packet/1]).
 
--include("interface.hrl").
-
--export([start_link/1]).
--export([init/1]).
--define(ETH_P_ALL, 16#0300).
-
-handle_call(_, _, _) ->
-  true.
-start_link(FD) ->
-  supervisor:start_link({local, ?MODULE}, ?MODULE, [FD]).
-
-init([FD]) ->
-  FId = spawn(fun() -> loop(FD) end),
-  io:format("loop id : ~p~n", [FId]),
-  {ok, { {one_for_one, 60, 3600}, []} }.
-%
-%
-%
-loop(FD) ->
-  {Result, Buf} = procket:recvfrom(FD, 4096),
-  if
-    Result == error ->
-      false;
-    Result == ok ->
-      <<DestMacAddr:48, SourceMacAddr:48, Type:16, Data/bitstring>> = Buf,
-      <<S1, S2, S3, S4, S5, S6>> = <<SourceMacAddr:48>>,
-      case ets:match(interface, {interface, '$1', '$2', '$3', [S1, S2, S3, S4, S5, S6]}) of
-        [] ->
-          ?PROFILER_START(self()),
-          ethernetType(Type, Data),
-          ?PROFILER_STOP();
-        SelfIp ->
-          source_my_ip
-      end;
-    true ->
-      true
-  end,
-  loop(FD).
-
-% ICMP Protocol
-ethernetType(16#0800, Data) ->
+packet(Data) ->
   <<Ver:4, Len:4, ServiceType, Packetlen:16, IdentificationNumber:16,
       Flg:3, Offset:13, TTL, Protocol, CheckSum:16, SourceIp:32, DestIp:32,
       Type, Code, Other/bitstring>> = Data,
@@ -66,15 +18,16 @@ ethernetType(16#0800, Data) ->
       SendCheckSum = checksum(SendData, 16#0000),
       gen_server:cast(packet_sender, {icmp_request, {IfName, DestMac, <<Ver:4, Len:4, ServiceType, Packetlen:16, IdentificationNumber:16,Flg:3, Offset:13, CountTTL, Protocol, SendCheckSum:16, SourceIp:32, DestIp:32, Type, Code, Other/bitstring>>}})
 
-  end,
-  true;
 
-% ARP Protocol
-ethernetType(16#0806, Data) ->
-  arp:packet(Data),
-  true;
-ethernetType(_, _) ->
-  true.
+  end.
+
+% ICMP check sump
+checksum(<<>>, Sum) ->
+  Sum bxor 16#FFFF;
+checksum(<<A:16, Other/bitstring>>, Sum) ->
+  Check = A + Sum,
+  Res = (Check band 16#FFFF) + (Check bsr 16),
+  checksum(Other, Res).
 
 debug_icmp_print(Data) ->
   <<Ver:4, Len:4, ServiceType, Packetlen:16, IdentificationNumber:16,
@@ -99,9 +52,3 @@ debug_icmp_print(Data) ->
   io:format("Type                  ~p~n", [Type]),
   io:format("Code                  ~p~n", [Code]).
 
-checksum(<<>>, Sum) ->
-  Sum bxor 16#FFFF;
-checksum(<<A:16, Other/bitstring>>, Sum) ->
-  Check = A + Sum,
-  Res = (Check band 16#FFFF) + (Check bsr 16),
-  checksum(Other, Res).

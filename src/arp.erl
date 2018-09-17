@@ -42,11 +42,11 @@ request_arp(If, Nexthop) ->
     [] ->
       false;
     [[SourceIp, SourceMacAddr]] ->
-      ARPHeader = arp:to_binary(#arpHeader{
-        hardwareType=?ETHERNET, protocol=16#0800, addressLen=16#06, protocolLen=16#04,
-        operationCode=16#0001,
-        sourceMacAddress=SourceMacAddr, sourceIPAddress=tuple_to_list(SourceIp),
-        destMacAddress=[16#00, 16#00, 16#00, 16#00, 16#00, 16#00], destIPAddress=tuple_to_list(Nexthop)
+      ARPHeader = arp:to_binary(#arp_header{
+        hw_type=?ETHERNET, protocol=16#0800, address_len=16#06, protocol_len=16#04,
+        operation_code=16#0001,
+        source_mac_addr=SourceMacAddr, source_ip_addr=tuple_to_list(SourceIp),
+        dest_mac_addr=[16#00, 16#00, 16#00, 16#00, 16#00, 16#00], dest_ip_addr=tuple_to_list(Nexthop)
       }),
       gen_server:cast(packet_sender, {arp_request, {If, ARPHeader}})
   end.
@@ -76,27 +76,27 @@ packet(_) ->
   true.
 
 to_binary(Record) ->
-  HardwareType = binary:encode_unsigned(Record#arpHeader.hardwareType),
-  Protocol = binary:encode_unsigned(Record#arpHeader.protocol),
-  AddressLen = binary:encode_unsigned(Record#arpHeader.addressLen),
-  ProtocolLen = binary:encode_unsigned(Record#arpHeader.protocolLen),
-  OperationCode = binary:encode_unsigned(Record#arpHeader.operationCode),
-  SourceMacAddress = list_to_binary(Record#arpHeader.sourceMacAddress),
-  SourceIPAddress = list_to_binary(Record#arpHeader.sourceIPAddress),
-  DestMacAddress = list_to_binary(Record#arpHeader.destMacAddress),
-  DestIPAddress = list_to_binary(Record#arpHeader.destIPAddress),
+  HwType = binary:encode_unsigned(Record#arp_header.hw_type),
+  Protocol = binary:encode_unsigned(Record#arp_header.protocol),
+  AddressLen = binary:encode_unsigned(Record#arp_header.address_len),
+  ProtocolLen = binary:encode_unsigned(Record#arp_header.protocol_len),
+  OperationCode = binary:encode_unsigned(Record#arp_header.operation_code),
+  SourceMacAddr = list_to_binary(Record#arp_header.source_mac_addr),
+  SourceIPAddr = list_to_binary(Record#arp_header.source_ip_addr),
+  DestMacAddr = list_to_binary(Record#arp_header.dest_mac_addr),
+  DestIPAddr = list_to_binary(Record#arp_header.dest_ip_addr),
 
   <<
     00,
-    HardwareType/bitstring,
+    HwType/bitstring,
     Protocol/bitstring,
     AddressLen/bitstring,
     ProtocolLen/bitstring,
     00,
     OperationCode/bitstring,
-    SourceMacAddress/bitstring,
-    SourceIPAddress/bitstring,
-    DestMacAddress/bitstring,
-    DestIPAddress/bitstring
+    SourceMacAddr/bitstring,
+    SourceIPAddr/bitstring,
+    DestMacAddr/bitstring,
+    DestIPAddr/bitstring
   >>.
 
