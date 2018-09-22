@@ -6,6 +6,8 @@
 -module(packet_sender).
 -behaviour(gen_server).
 
+-include("arp.hrl").
+
 % hardware type
 -define(ETHERNET, 16#0001).
 -define(ETH_P_IP, 16#0008).
@@ -28,7 +30,9 @@
   type
 }).
 
--include("arp.hrl").
+%%====================================================================
+%% API
+%%====================================================================
 
 start_link([FD]) ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [FD], []).
@@ -68,6 +72,14 @@ handle_cast({udp_request, {IfName, DestMac, TcpData}}, State) ->
 handle_cast(_, State) ->
   {noreply, State}.
 
+%%====================================================================
+%% Internal functions
+%%====================================================================
+
+%%--------------------------------------------------------------------
+%
+% get interface fd
+%
 get_interface_fd([], _) ->
   false;
 get_interface_fd([#{if_name := IfName}=IfFd| _], IfName) ->
@@ -75,25 +87,7 @@ get_interface_fd([#{if_name := IfName}=IfFd| _], IfName) ->
 get_interface_fd([_| Tail], IfName) ->
   get_interface_fd(Tail, IfName).
 
-% make bind file descriptor
-make_bind([],  Res) ->
-  Res;
-make_bind([[interface, _, undefined, _, _]| Tail], Res) ->
-  make_bind(Tail, Res);
-make_bind([[interface, _, _, undefined, _]| Tail], Res) ->
-  make_bind(Tail, Res);
-make_bind([[interface, _, {127, 0, 0, 1}, _, _]| Tail], Res) ->
-  make_bind(Tail, Res);
-make_bind([[_, IfName, {A1, A2, A3, A4}, _, MacAddr]|Tail], Res) ->
-  {ok, IPFD} = procket:open(0, [
-    {protocol, raw},
-    {type, raw},
-    {family, packet}
-  ]),
-  ok = packet:bind(IPFD, packet:ifindex(IPFD, IfName)),
-  erlang:open_port({fd, IPFD, IPFD}, [binary, stream]),
-  make_bind(Tail, [#{if_name => IfName, ip_fd => IPFD, mac_addr => MacAddr}| Res]).
-
+%%--------------------------------------------------------------------
 %%
 %% @doc request arp
 %%
@@ -102,32 +96,37 @@ arp_request(FD, HwAddr, ARPHeader) ->
               dest_mac_addr=[16#ff, 16#ff, 16#ff, 16#ff, 16#ff, 16#ff], type=?TYPE_ARP}),
   request(FD, <<Ethernet/bitstring, ARPHeader/bitstring>>).
 
+%%--------------------------------------------------------------------
 %
 % ip request
 %
+ip_request(FD, SourceMac, DestMac, Data) ->
+  Ethernet = ethernet_to_binary(#ethernet_header{
+                                  source_mac_addr=SourceMac,
+                                  dest_mac_addr=DestMac,
+                                  type=?TYPE_IP}
+  ),
+  request(FD, <<Ethernet/bitstring, Data/bitstring>>).
+
+%%--------------------------------------------------------------------
+%
+% icmp request
+%
 icmp_request(FD, SourceMac, DestMac, Data) when is_tuple(DestMac) ->
   icmp_request(FD, SourceMac, tuple_to_list(DestMac), Data);
-
 icmp_request(FD, SourceMac, DestMac, Data) ->
-  Ethernet = ethernet_to_binary(#ethernet_header{
-                                  source_mac_addr=SourceMac,
-                                  dest_mac_addr=DestMac,
-                                  type=?TYPE_IP}
-  ),
-  request(FD, <<Ethernet/bitstring, Data/bitstring>>).
+  ip_request(FD, SourceMac, DestMac, Data).
 
+%%--------------------------------------------------------------------
+%
+% tcp request
+%
 tcp_request(FD, SourceMac, DestMac, Data) when is_tuple(DestMac) ->
   tcp_request(FD, SourceMac, tuple_to_list(DestMac), Data);
-
 tcp_request(FD, SourceMac, DestMac, Data) ->
-  Ethernet = ethernet_to_binary(#ethernet_header{
-                                  source_mac_addr=SourceMac,
-                                  dest_mac_addr=DestMac,
-                                  type=?TYPE_IP}
-  ),
-  request(FD, <<Ethernet/bitstring, Data/bitstring>>).
+  ip_request(FD, SourceMac, DestMac, Data).
 
-
+%%--------------------------------------------------------------------
 %
 % request send packet
 %
@@ -135,11 +134,9 @@ request(FD, Buf) ->
   case procket:write(FD, Buf) of
     ok ->
       true;
-    {ok, S} ->
+    {ok, _} ->
       true;
-    {error, Er} ->
-      io:format("send to error~n"),
-      io:format("~p~n", [Er]),
+    {error, _} ->
       false
   end.
 
