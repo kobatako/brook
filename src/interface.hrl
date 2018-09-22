@@ -4,3 +4,6 @@
   netmask,
   hw_addr
 }).
+
+-define(ETH_P_ALL, 16#0300).
+-define(SELEF_IP, {127, 0, 0, 1}).

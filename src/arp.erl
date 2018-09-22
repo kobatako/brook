@@ -19,7 +19,11 @@
 % response
 -define(OPTION_RESPONSE, 16#0002).
 
--export([init/0, get_mac_addr/1, packet/1, to_binary/1]).
+-export([init/0, get_mac_addr/1, packet/1]).
+
+%%====================================================================
+%% API
+%%====================================================================
 
 init() ->
   arp_table = ets:new(arp_table, [set, public, {keypos, #arp_table.dest_mac_addr}, named_table]).
@@ -41,7 +45,7 @@ request_arp(If, Nexthop) ->
     [] ->
       false;
     [[SourceIp, SourceMacAddr]] ->
-      ARPHeader = arp:to_binary(#arp_header{
+      ARPHeader = to_binary(#arp_header{
         hw_type=?ETHERNET, protocol=16#0800, address_len=16#06, protocol_len=16#04,
         operation_code=16#0001,
         source_mac_addr=SourceMacAddr, source_ip_addr=tuple_to_list(SourceIp),
@@ -54,9 +58,9 @@ request_arp(If, Nexthop) ->
 %
 % arp response packet
 %
-packet(<<?ETHERNET:16, Type:16, _, _, ?OPTION_RESPONSE:16,
+packet(<<?ETHERNET:16, _:16, _, _, ?OPTION_RESPONSE:16,
           SourceMacAddr:48, SourceIp:32,
-          DestMacAddr:48, DestIp:32, _/bitstring>>) ->
+          _:48, DestIp:32, _/bitstring>>) ->
   <<S1, S2, S3, S4>> = <<SourceIp:32>>,
   <<D1, D2, D3, D4>> = <<DestIp:32>>,
   <<SM1, SM2, SM3, SM4, SM5, SM6>> = <<SourceMacAddr:48>>,
@@ -67,10 +71,16 @@ packet(<<?ETHERNET:16, Type:16, _, _, ?OPTION_RESPONSE:16,
                 type=?ETHERNET
     }
   );
-
 packet(_) ->
   true.
 
+%%====================================================================
+%% Internal functions
+%%====================================================================
+
+%
+% arp response packet
+%
 to_binary(Record) ->
   HwType = binary:encode_unsigned(Record#arp_header.hw_type),
   Protocol = binary:encode_unsigned(Record#arp_header.protocol),
