@@ -10,7 +10,7 @@
 -define(ETHERNET, 16#0001).
 -define(ETH_P_IP, 16#0008).
 -define(TYPE_ARP, 16#0806).
--define(TYPE_ICMP, 16#0800).
+-define(TYPE_IP, 16#0800).
 
 %% API
 -export([start_link/1]).
@@ -30,13 +30,11 @@
 
 -include("arp.hrl").
 
-start_link([]) ->
-  gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
+start_link([FD]) ->
+  gen_server:start_link({local, ?MODULE}, ?MODULE, [FD], []).
 
-init(_) ->
-  Interfaces = ets:match(interface, {'$1', '$2', '$3', '$4', '$5'}),
-  InterfaceFD = make_bind(Interfaces, []),
-  {ok, InterfaceFD}.
+init([FD]) ->
+  {ok, FD}.
 
 handle_info(_Message, Storage) ->
   {noreply, Storage}.
@@ -48,13 +46,23 @@ handle_call(?MODULE, _, _) ->
   true.
 
 handle_cast({arp_request, {IfName, ArpData}}, State) ->
-  #{fd := FD, mac_addr := MacAddr} = get_interface_fd(State, IfName),
+  #{ip_fd := FD, mac_addr := MacAddr} = get_interface_fd(State, IfName),
   arp_request(FD, MacAddr, ArpData),
   {noreply, State};
 
-handle_cast({icmp_request, {IfName, DestMac, IcmpData}}, State) ->
-  #{fd := FD, mac_addr := SourceMac} = get_interface_fd(State, IfName),
-  icmp_request(FD, SourceMac, DestMac, IcmpData),
+handle_cast({icmp_request, {IfName, DestMac, IpData}}, State) ->
+  #{ip_fd := FD, mac_addr := SourceMac} = get_interface_fd(State, IfName),
+  icmp_request(FD, SourceMac, DestMac, IpData),
+  {noreply, State};
+
+handle_cast({tcp_request, {IfName, DestMac, TcpData}}, State) ->
+  #{ip_fd := FD, mac_addr := SourceMac} = get_interface_fd(State, IfName),
+  tcp_request(FD, SourceMac, DestMac, TcpData),
+  {noreply, State};
+
+handle_cast({udp_request, {IfName, DestMac, TcpData}}, State) ->
+  #{ip_fd := FD, mac_addr := SourceMac} = get_interface_fd(State, IfName),
+  tcp_request(FD, SourceMac, DestMac, TcpData),
   {noreply, State};
 
 handle_cast(_, State) ->
@@ -68,7 +76,7 @@ get_interface_fd([_| Tail], IfName) ->
   get_interface_fd(Tail, IfName).
 
 % make bind file descriptor
-make_bind([], Res) ->
+make_bind([],  Res) ->
   Res;
 make_bind([[interface, _, undefined, _, _]| Tail], Res) ->
   make_bind(Tail, Res);
@@ -76,16 +84,15 @@ make_bind([[interface, _, _, undefined, _]| Tail], Res) ->
   make_bind(Tail, Res);
 make_bind([[interface, _, {127, 0, 0, 1}, _, _]| Tail], Res) ->
   make_bind(Tail, Res);
-make_bind([[_, IfName, _, _, MacAddr]|Tail], Res) ->
-  {ok, FD} = procket:open(0, [
-    {protocol, ?ETH_P_IP},
+make_bind([[_, IfName, {A1, A2, A3, A4}, _, MacAddr]|Tail], Res) ->
+  {ok, IPFD} = procket:open(0, [
+    {protocol, raw},
     {type, raw},
-    {family, packet},
-    {interface, IfName}
+    {family, packet}
   ]),
-  ok = packet:bind(FD, packet:ifindex(FD, IfName)),
-  erlang:open_port({fd, FD, FD}, [binary, stream]),
-  make_bind(Tail, [#{if_name => IfName, fd => FD, mac_addr => MacAddr}| Res]).
+  ok = packet:bind(IPFD, packet:ifindex(IPFD, IfName)),
+  erlang:open_port({fd, IPFD, IPFD}, [binary, stream]),
+  make_bind(Tail, [#{if_name => IfName, ip_fd => IPFD, mac_addr => MacAddr}| Res]).
 
 %%
 %% @doc request arp
@@ -96,7 +103,7 @@ arp_request(FD, HwAddr, ARPHeader) ->
   request(FD, <<Ethernet/bitstring, ARPHeader/bitstring>>).
 
 %
-% icmp request
+% ip request
 %
 icmp_request(FD, SourceMac, DestMac, Data) when is_tuple(DestMac) ->
   icmp_request(FD, SourceMac, tuple_to_list(DestMac), Data);
@@ -105,20 +112,34 @@ icmp_request(FD, SourceMac, DestMac, Data) ->
   Ethernet = ethernet_to_binary(#ethernet_header{
                                   source_mac_addr=SourceMac,
                                   dest_mac_addr=DestMac,
-                                  type=?TYPE_ICMP}
+                                  type=?TYPE_IP}
   ),
   request(FD, <<Ethernet/bitstring, Data/bitstring>>).
+
+tcp_request(FD, SourceMac, DestMac, Data) when is_tuple(DestMac) ->
+  tcp_request(FD, SourceMac, tuple_to_list(DestMac), Data);
+
+tcp_request(FD, SourceMac, DestMac, Data) ->
+  Ethernet = ethernet_to_binary(#ethernet_header{
+                                  source_mac_addr=SourceMac,
+                                  dest_mac_addr=DestMac,
+                                  type=?TYPE_IP}
+  ),
+  request(FD, <<Ethernet/bitstring, Data/bitstring>>).
+
 
 %
 % request send packet
 %
 request(FD, Buf) ->
-  case procket:sendto(FD, Buf) of
+  case procket:write(FD, Buf) of
     ok ->
       true;
-    {ok, _} ->
+    {ok, S} ->
       true;
-    {_, _} ->
+    {error, Er} ->
+      io:format("send to error~n"),
+      io:format("~p~n", [Er]),
       false
   end.
 

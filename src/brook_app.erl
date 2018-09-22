@@ -21,15 +21,11 @@ start(_StartType, _StartArgs) ->
   {ok, IF} = inet:getifaddrs(),
   Listen = lists:map(fun(Elm) -> interface_list(Elm) end, IF),
   Interface = ets:new(interface, [set, public, {keypos, #interface.name}, named_table]),
+  io:format("~p~n", [Listen]),
   save_interface(Listen, Interface),
-  {ok, FD} = procket:open(0, [
-    {protocol, ?ETH_P_ALL},
-    {type, raw},
-    {family, packet}
-  ]),
   arp:init(),
   ip:init(),
-  brook_sup:start_link(FD).
+  brook_sup:start_link(make_bind(Listen, [])).
 
 %%--------------------------------------------------------------------
 stop(_State) ->
@@ -38,6 +34,24 @@ stop(_State) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
+% make bind file descriptor
+make_bind([],  Res) ->
+  Res;
+make_bind([{interface, _, undefined, _, _}| Tail], Res) ->
+  make_bind(Tail, Res);
+make_bind([{interface, _, _, undefined, _}| Tail], Res) ->
+  make_bind(Tail, Res);
+make_bind([{interface, _, {127, 0, 0, 1}, _, _}| Tail], Res) ->
+  make_bind(Tail, Res);
+make_bind([{_, IfName, Addr, _, MacAddr}|Tail], Res) ->
+  {ok, IPFD} = procket:open(0, [
+    {protocol, ?ETH_P_ALL},
+    {type, raw},
+    {family, packet}
+  ]),
+  ok = packet:bind(IPFD, packet:ifindex(IPFD, IfName)),
+  make_bind(Tail, [#{if_name => IfName, ip_fd => IPFD, mac_addr => MacAddr}| Res]).
 
 save_interface([], _) ->
   true;
@@ -61,10 +75,11 @@ print_interface(IF, Interface) ->
 %
 interface_list(Elm) ->
   {Name, Opts} = Elm,
+  io:format("~p~n", [Elm]),
   interface_opt(Opts, #interface{name=Name}).
 
 %
-%
+% interface option
 %
 interface_opt([], Opt) ->
   Opt;
@@ -72,9 +87,11 @@ interface_opt([Head| Tail], Opt) ->
   Res = case Head of
     {hwaddr, Hwaddr} ->
       Opt#interface{hw_addr=Hwaddr};
-    {addr, Addr} ->
+    % IP v4
+    {addr, {_, _, _, _}=Addr} ->
       Opt#interface{addr=Addr};
-    {netmask, Netmask} ->
+    % IP v4
+    {netmask, {_, _, _, _}=Netmask} ->
       Opt#interface{netmask=Netmask};
     _ ->
       Opt

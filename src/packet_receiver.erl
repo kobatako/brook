@@ -3,10 +3,8 @@
 
 -include("interface.hrl").
 
--define(ETH_P_ALL, 16#0300).
-
--define(ARP_TYPE,  16#0806).
--define(ICMP_TYPE, 16#0800).
+-define(TYPE_ARP,  16#0806).
+-define(TYPE_IP, 16#0800).
 
 -export([start_link/1]).
 -export([init/1]).
@@ -20,16 +18,24 @@ start_link(FD) ->
   gen_event:add_handler(receiver, ?MODULE, [FD]).
 
 init([FD]) ->
-  spawn(fun() -> loop(FD) end),
+  loop_up(FD),
   {ok, FD}.
+
+loop_up([]) ->
+  true;
+loop_up([#{ip_fd := FD}| Tail]) ->
+  spawn(fun() -> loop(FD) end),
+  loop_up(Tail).
 
 % main loop
 loop(FD) ->
-  {Result, Buf} = procket:recvfrom(FD, 4096),
-  case Result of
-    error ->
+  case procket:recv(FD, 8192) of
+    {error, eagain} ->
       false;
-    ok ->
+    {error, Er} ->
+      io:format("recv from error: ~p~n", [Er]),
+      false;
+    {ok, Buf} ->
       gen_event:notify(receiver, Buf),
       true;
     _ ->
@@ -45,6 +51,7 @@ handle_event(Buf, Fd) ->
     [] ->
       ethernet_type(Type, Data);
     _ ->
+      % io:format("send data : ~p~n", [Buf]),
       source_my_ip
   end,
   {ok, Fd}.
@@ -56,13 +63,14 @@ handle_call(Buf, Fd) ->
 terminate(_Arg, _State) ->
   ok.
 
-% ICMP Protocol
-ethernet_type(?ICMP_TYPE, Data) ->
-  icmp:packet(Data);
+% IP Protocol
+ethernet_type(?TYPE_IP, Data) ->
+  ip:packet(Data);
 
 % ARP Protocol
-ethernet_type(?ARP_TYPE, Data) ->
+ethernet_type(?TYPE_ARP, Data) ->
   arp:packet(Data);
-ethernet_type(_, _) ->
+
+ethernet_type(_Type, _Data) ->
   false.
 

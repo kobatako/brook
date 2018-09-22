@@ -30,7 +30,7 @@ start_link(FD) ->
 init([FD]) ->
     ChildSpecs = [
       #{id => packet_sender,
-        start => {packet_sender, start_link, [[]]},
+        start => {packet_sender, start_link, [[FD]]},
         restart => permanent,
         shutdown => brutal_kill,
         type => worker,
@@ -38,9 +38,7 @@ init([FD]) ->
       }
     ],
     packet_receiver:start_link(FD),
-    % supervisor:start_child({gloabl, main}, ChildSpecs),
     {ok, { {one_for_one, 60, 3600}, ChildSpecs} }.
-    % {ok, { {one_for_one, 60, 3600}, []} }.
 
 %%====================================================================
 %% Internal functions
