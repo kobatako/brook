@@ -17,6 +17,9 @@
 
 -export([init/0]).
 -export([packet/1]).
+-export([route/0]).
+-export([route/1]).
+-export([route/3]).
 
 -record(routing_table, {
   source_route,       % routing learn source
@@ -36,15 +39,41 @@
 %%====================================================================
 
 init() ->
-  ets:new(routing_table, [duplicate_bag, protected,
-          {keypos, #routing_table.out_interface}, named_table]),
-  IfList = ets:match(interface, {'$1', '$2', '$3', '$4', '$5'}),
+  {atomic, ok} = mnesia:create_table(routing_table, [{attributes, record_info(fields, routing_table)}, {type, bag}]),
+  IfList = interface:list(),
   set_direct_routing_table(IfList, []).
 
 %%--------------------------------------------------------------------
 
 packet(<<_:128, DestIp:32, _/bitstring>> = Data) ->
   receiver_ip(is_self_ip(<<DestIp:32>>), Data).
+
+
+route() ->
+  true.
+route(show) ->
+  Routes = mnesia:dirty_match_object(routing_table,
+    {'_', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9', '$10', '$11'}),
+  Routes.
+
+route(add, static, #{dest_route := {D1, D2, D3, D4}, subnetmask := {S1, S2, S3, S4},
+      nexthop := Nexthop, out_interface := OutInterface}=Opt) ->
+  <<DestRoute:32>> = <<D1, D2, D3, D4>>,
+  <<Subnetmask:32>> = <<S1, S2, S3, S4>>,
+  RoutingTable = #routing_table{
+    source_route=?SOURCE_STATIC,
+    dest_route={D1, D2, D3, D4},
+    dest_route_int=DestRoute,
+    subnetmask={S1, S2, S3, S4},
+    subnetmask_int=Subnetmask,
+    ad=1,
+    metric=0,
+    nexthop=Nexthop,
+    age=0,
+    out_interface=OutInterface
+  },
+  set_to_routing_table(RoutingTable),
+  ok.
 
 %%====================================================================
 %% Internal functions
@@ -75,7 +104,7 @@ receiver_ip(false, <<Ver:4, Len:4, ServiceType, Packetlen:16, IdentificationNumb
 %%--------------------------------------------------------------------
 
 is_self_ip(<<D1, D2, D3, D4>>) ->
-  case ets:match(interface, {'_', '$1', {D1, D2, D3, D4}, '_', '_'}) of
+  case interface:match({'_', '$1', {D1, D2, D3, D4}, '_', '_'}) of
     [] ->
       false;
     _ ->
@@ -113,7 +142,7 @@ checksum(<<A:16, Other/bitstring>>, Sum) ->
 
 %%--------------------------------------------------------------------
 get_dest_route(DestIp) ->
-  Routes = ets:match(routing_table,
+  Routes = mnesia:dirty_match_object(routing_table,
           {'_', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9', '$10', '$11'}),
   Match = match_dest_ip(Routes, DestIp, []),
   fetch_dest_route(Match, {}).
@@ -157,7 +186,7 @@ fetch_dest_route([{_, _, Subnet, _, _}=Route| Tail],
 % match destination ip for routing table
 match_dest_ip([], _, List) ->
   List;
-match_dest_ip([[_, _, Ip, _, Subnetmask, Ad, Metric, Nexthop, _, If]| Tail],
+match_dest_ip([{_, _, _, Ip, _, Subnetmask, Ad, Metric, Nexthop, _, If}| Tail],
                   DestIp, List) when is_integer(DestIp) ->
   case DestIp band Subnetmask of
     Ip ->
@@ -172,12 +201,12 @@ match_dest_ip([[_, _, Ip, _, Subnetmask, Ad, Metric, Nexthop, _, If]| Tail],
 %
 set_direct_routing_table([], List) ->
   List;
-set_direct_routing_table([[_, _, ?SELEF_IP, _, _]| Tail], List) ->
+set_direct_routing_table([{_, _, ?SELEF_IP, _, _}| Tail], List) ->
   set_direct_routing_table(Tail, List);
-set_direct_routing_table([[_, _, IP, Netmask, _]| Tail], List)
+set_direct_routing_table([{_, _, IP, Netmask, _}| Tail], List)
                         when IP =:= undefined; Netmask =:= undefind ->
   set_direct_routing_table(Tail, List);
-set_direct_routing_table([[_, Name, {I1, I2, I3, I4}, {S1, S2, S3, S4}, _]| Tail], List) ->
+set_direct_routing_table([{_, Name, {I1, I2, I3, I4}, {S1, S2, S3, S4}, _}| Tail], List) ->
   <<DestIp:32>> =  <<I1, I2, I3, I4>>,
   <<Subnetmask:32>> = <<S1, S2, S3, S4>>,
   Mask = DestIp band Subnetmask,
@@ -205,5 +234,7 @@ set_to_routing_table(#routing_table{dest_route=Ip, subnetmask=Netmask})
   false;
 set_to_routing_table(#routing_table{dest_route=Ip, subnetmask=Netmask} = RoutingTable)
                     when is_tuple(Ip), is_tuple(Netmask) ->
-  ets:insert_new(routing_table, RoutingTable).
+  mnesia:transaction(fun() ->
+    mnesia:write(routing_table, RoutingTable, write)
+  end).
 
