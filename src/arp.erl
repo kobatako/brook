@@ -20,6 +20,7 @@
 -define(OPTION_RESPONSE, 16#0002).
 
 -export([init/0, get_mac_addr/1, packet/1]).
+-export([request_arp/2]).
 -export([table/0, table/1]).
 
 %%====================================================================
@@ -37,8 +38,7 @@ table(show) ->
 get_mac_addr({If, Nexthop}) ->
   case mnesia:dirty_match_object(arp_table, {'_', '$1', Nexthop, '$2', '_'}) of
     [] ->
-      request_arp(If, Nexthop),
-      false;
+      undefined;
     [{arp_table, _, _, DestMac, _}| _] ->
       DestMac
   end.
@@ -63,10 +63,6 @@ packet(<<?ETHERNET:16, _:16, _, _, ?OPTION_RESPONSE:16,
 packet(_) ->
   true.
 
-%%====================================================================
-%% Internal functions
-%%====================================================================
-
 %
 % arp request
 %
@@ -84,6 +80,11 @@ request_arp(If, Nexthop) ->
       }),
       gen_server:cast(packet_sender, {arp_request, {If, ARPHeader}})
   end.
+
+
+%%====================================================================
+%% Internal functions
+%%====================================================================
 
 %
 % arp response packet
