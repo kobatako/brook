@@ -20,39 +20,27 @@
 -define(OPTION_RESPONSE, 16#0002).
 
 -export([init/0, get_mac_addr/1, packet/1]).
+-export([table/0, table/1]).
 
 %%====================================================================
 %% API
 %%====================================================================
 
 init() ->
-  arp_table = ets:new(arp_table, [set, public, {keypos, #arp_table.dest_mac_addr}, named_table]).
+  {atomic, ok} = mnesia:create_table(arp_table, [{attributes, record_info(fields, arp_table)}]).
+
+table() ->
+  true.
+table(show) ->
+  mnesia:dirty_match_object(arp_table, {'_', '$1', '$2', '$3', '$4'}).
 
 get_mac_addr({If, Nexthop}) ->
-  case ets:match(arp_table, {'_', '$1', Nexthop, '$2', '_'}) of
+  case mnesia:dirty_match_object(arp_table, {'_', '$1', Nexthop, '$2', '_'}) of
     [] ->
       request_arp(If, Nexthop),
       false;
-    [[_, DestMac]] ->
+    [{arp_table, _, _, DestMac, _}| _] ->
       DestMac
-  end.
-
-%
-% arp request
-%
-request_arp(If, Nexthop) ->
-  case ets:match(interface, {'_', If, '$1', '_', '$2'}) of
-    [] ->
-      false;
-    [[SourceIp, SourceMacAddr]] ->
-      ARPHeader = to_binary(#arp_header{
-        hw_type=?ETHERNET, protocol=16#0800, address_len=16#06, protocol_len=16#04,
-        operation_code=16#0001,
-        source_mac_addr=SourceMacAddr, source_ip_addr=tuple_to_list(SourceIp),
-        dest_mac_addr=[16#00, 16#00, 16#00, 16#00, 16#00, 16#00],
-        dest_ip_addr=tuple_to_list(Nexthop)
-      }),
-      gen_server:cast(packet_sender, {arp_request, {If, ARPHeader}})
   end.
 
 %
@@ -64,19 +52,38 @@ packet(<<?ETHERNET:16, _:16, _, _, ?OPTION_RESPONSE:16,
   <<S1, S2, S3, S4>> = <<SourceIp:32>>,
   <<D1, D2, D3, D4>> = <<DestIp:32>>,
   <<SM1, SM2, SM3, SM4, SM5, SM6>> = <<SourceMacAddr:48>>,
-  ets:insert_new(arp_table,
-    #arp_table{source_ip_addr={D1, D2, D3, D4},
-                dest_ip_addr={S1, S2, S3, S4},
-                dest_mac_addr={SM1, SM2, SM3, SM4, SM5, SM6},
-                type=?ETHERNET
-    }
-  );
+  ArpTable = #arp_table{source_ip_addr={D1, D2, D3, D4},
+      dest_ip_addr={S1, S2, S3, S4},
+      dest_mac_addr={SM1, SM2, SM3, SM4, SM5, SM6},
+      type=?ETHERNET
+  },
+  mnesia:transaction(fun() ->
+    mnesia:write(arp_table, ArpTable, write)
+  end);
 packet(_) ->
   true.
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
+
+%
+% arp request
+%
+request_arp(If, Nexthop) ->
+  case interface:match({'_', If, '$1', '_', '$2'}) of
+    [] ->
+      false;
+    [{_, _, SourceIp, _, SourceMacAddr}] ->
+      ARPHeader = to_binary(#arp_header{
+        hw_type=?ETHERNET, protocol=16#0800, address_len=16#06, protocol_len=16#04,
+        operation_code=16#0001,
+        source_mac_addr=SourceMacAddr, source_ip_addr=tuple_to_list(SourceIp),
+        dest_mac_addr=[16#00, 16#00, 16#00, 16#00, 16#00, 16#00],
+        dest_ip_addr=tuple_to_list(Nexthop)
+      }),
+      gen_server:cast(packet_sender, {arp_request, {If, ARPHeader}})
+  end.
 
 %
 % arp response packet

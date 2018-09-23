@@ -16,6 +16,7 @@
 %%====================================================================
 
 start(_StartType, _StartArgs) ->
+  mnesia:start(),
   Listen = interface:init(),
   arp:init(),
   ip:init(),

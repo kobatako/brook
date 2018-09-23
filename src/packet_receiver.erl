@@ -55,7 +55,7 @@ loop(FD) ->
 handle_event(Buf, Fd) ->
   <<_:48, SourceMacAddr:48, Type:16, Data/bitstring>> = Buf,
   <<S1, S2, S3, S4, S5, S6>> = <<SourceMacAddr:48>>,
-  case ets:match(interface, {interface, '$1', '$2', '$3', [S1, S2, S3, S4, S5, S6]}) of
+  case interface:match({interface, '$1', '$2', '$3', [S1, S2, S3, S4, S5, S6]}) of
     [] ->
       ethernet_type(Type, Data);
     _ ->

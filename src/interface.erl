@@ -3,6 +3,8 @@
 -include("interface.hrl").
 
 -export([init/0]).
+-export([list/0]).
+-export([match/1]).
 
 %%====================================================================
 %% API
@@ -11,9 +13,16 @@
 init() ->
   {ok, IF} = inet:getifaddrs(),
   Listen = [interface_list(Elm) || Elm <- IF],
-  Interface = ets:new(interface, [set, public, {keypos, #interface.name}, named_table]),
-  save_interface(Listen, Interface),
+  % Interface = ets:new(interface, [set, public, {keypos, #interface.name}, named_table]),
+  mnesia:create_table(interface, [{attributes, record_info(fields, interface)}]),
+  save_interface(Listen),
   make_bind(Listen, []).
+
+list() ->
+  mnesia:dirty_match_object(interface, {'$1', '$2', '$3', '$4', '$5'}).
+
+match(Match) ->
+  mnesia:dirty_match_object(interface, Match).
 
 %%====================================================================
 %% Internal functions
@@ -39,11 +48,13 @@ make_bind([{_, IfName, _, _, MacAddr}|Tail], Res) ->
 
 %%--------------------------------------------------------------------
 
-save_interface([], _) ->
+save_interface([]) ->
   true;
-save_interface([Head| Tail], Interface) ->
-  ets:insert_new(Interface, Head),
-  save_interface(Tail, Interface).
+save_interface([Head| Tail]) ->
+  mnesia:transaction(fun() ->
+    mnesia:write(interface, Head, write)
+  end),
+  save_interface(Tail).
 
 %%--------------------------------------------------------------------
 %%
