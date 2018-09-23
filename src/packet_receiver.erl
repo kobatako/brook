@@ -3,9 +3,6 @@
 
 -include("interface.hrl").
 
--define(TYPE_ARP,  16#0806).
--define(TYPE_IP, 16#0800).
-
 -export([start_link/1]).
 -export([init/1]).
 -export([handle_event/2]).
@@ -16,9 +13,7 @@
 %% API
 %%====================================================================
 
-start_link(FD) ->
-  gen_event:start_link({local, receiver}),
-  gen_event:start({local, receiver}),
+start_link(FD) -> gen_event:start_link({local, receiver}), gen_event:start({local, receiver}),
   gen_event:add_handler(receiver, ?MODULE, [FD]).
 
 %%--------------------------------------------------------------------
@@ -53,14 +48,7 @@ loop(FD) ->
 %%--------------------------------------------------------------------
 % handle event
 handle_event(Buf, Fd) ->
-  <<_:48, SourceMacAddr:48, Type:16, Data/bitstring>> = Buf,
-  <<S1, S2, S3, S4, S5, S6>> = <<SourceMacAddr:48>>,
-  case interface:match({interface, '$1', '$2', '$3', [S1, S2, S3, S4, S5, S6]}) of
-    [] ->
-      ethernet_type(Type, Data);
-    _ ->
-      source_my_ip
-  end,
+  ethernet:receive_packet(Buf),
   {ok, Fd}.
 
 %%--------------------------------------------------------------------
@@ -75,18 +63,4 @@ terminate(_Arg, _State) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
-
-%%--------------------------------------------------------------------
-% IP Protocol
-ethernet_type(?TYPE_IP, Data) ->
-  ip:packet(Data);
-
-%%--------------------------------------------------------------------
-% ARP Protocol
-ethernet_type(?TYPE_ARP, Data) ->
-  arp:packet(Data);
-
-%%--------------------------------------------------------------------
-ethernet_type(_Type, _Data) ->
-  false.
 

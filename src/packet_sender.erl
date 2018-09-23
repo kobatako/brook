@@ -54,19 +54,9 @@ handle_cast({arp_request, {IfName, ArpData}}, State) ->
   arp_request(FD, MacAddr, ArpData),
   {noreply, State};
 
-handle_cast({icmp_request, {IfName, DestMac, IpData}}, State) ->
+handle_cast({ip_request, {IfName, DestMac, IpData}}, State) ->
   #{ip_fd := FD, mac_addr := SourceMac} = get_interface_fd(State, IfName),
-  icmp_request(FD, SourceMac, DestMac, IpData),
-  {noreply, State};
-
-handle_cast({tcp_request, {IfName, DestMac, TcpData}}, State) ->
-  #{ip_fd := FD, mac_addr := SourceMac} = get_interface_fd(State, IfName),
-  tcp_request(FD, SourceMac, DestMac, TcpData),
-  {noreply, State};
-
-handle_cast({udp_request, {IfName, DestMac, TcpData}}, State) ->
-  #{ip_fd := FD, mac_addr := SourceMac} = get_interface_fd(State, IfName),
-  tcp_request(FD, SourceMac, DestMac, TcpData),
+  ip_request(FD, SourceMac, DestMac, IpData),
   {noreply, State};
 
 handle_cast(_, State) ->
@@ -107,24 +97,6 @@ ip_request(FD, SourceMac, DestMac, Data) ->
                                   type=?TYPE_IP}
   ),
   request(FD, <<Ethernet/bitstring, Data/bitstring>>).
-
-%%--------------------------------------------------------------------
-%
-% icmp request
-%
-icmp_request(FD, SourceMac, DestMac, Data) when is_tuple(DestMac) ->
-  icmp_request(FD, SourceMac, tuple_to_list(DestMac), Data);
-icmp_request(FD, SourceMac, DestMac, Data) ->
-  ip_request(FD, SourceMac, DestMac, Data).
-
-%%--------------------------------------------------------------------
-%
-% tcp request
-%
-tcp_request(FD, SourceMac, DestMac, Data) when is_tuple(DestMac) ->
-  tcp_request(FD, SourceMac, tuple_to_list(DestMac), Data);
-tcp_request(FD, SourceMac, DestMac, Data) ->
-  ip_request(FD, SourceMac, DestMac, Data).
 
 %%--------------------------------------------------------------------
 %
