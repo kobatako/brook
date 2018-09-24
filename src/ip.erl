@@ -18,7 +18,6 @@
 -export([init/0]).
 -export([receive_packet/1]).
 -export([send_packet/1]).
--export([route/0]).
 -export([route/1]).
 -export([route/3]).
 
@@ -39,6 +38,8 @@
 %% API
 %%====================================================================
 
+%%--------------------------------------------------------------------
+% init
 init() ->
   {atomic, ok} = mnesia:create_table(routing_table, [
     {attributes, record_info(fields, routing_table)},
@@ -52,11 +53,30 @@ init() ->
 receive_packet(<<_:128, DestIp:32, _/bitstring>> = Data) ->
   receiver_ip(is_self_ip(<<DestIp:32>>), Data).
 
-route() ->
-  true.
+%%--------------------------------------------------------------------
+% send packet
+send_packet(<<Head:64, 0, _:16, SourceIp:32, DestIp:32, Other/bitstring>>) ->
+  not_send_packet;
+send_packet(<<Head:80, _:16, SourceIp:32, DestIp:32, Other/bitstring>>) ->
+  SendData = <<Head:80, SourceIp:32, DestIp:32>>,
+  SendCheckSum = checksum(SendData, 16#0000),
+  case get_dest_ip(DestIp) of
+    not_found_dest_ip ->
+      false;
+    {IfName, NextIp} ->
+      ethernet:send_packet(
+        <<Head:80, SendCheckSum:16, SourceIp:32, DestIp:32, Other/bitstring>>,
+        {IfName, NextIp}
+      )
+  end.
+
+%%--------------------------------------------------------------------
+% show route
 route(show) ->
   all_routing_table().
 
+%%--------------------------------------------------------------------
+% show route
 route(add, static, #{dest_route := {D1, D2, D3, D4}, subnetmask := {S1, S2, S3, S4},
       nexthop := Nexthop, out_interface := OutInterface}=Opt) ->
   <<DestRoute:32>> = <<D1, D2, D3, D4>>,
@@ -93,27 +113,12 @@ receiver_ip(false, <<Head:64, TTL, 1, Other/bitstring>>=Data) ->
 receiver_ip(false, <<Head:64, TTL, Other/bitstring>>) ->
   send_packet(<<Head:64, (TTL-1), Other/bitstring>>).
 
-send_packet(<<Head:64, 0, _:16, SourceIp:32, DestIp:32, Other/bitstring>>) ->
-  not_send_packet;
-send_packet(<<Head:80, _:16, SourceIp:32, DestIp:32, Other/bitstring>>) ->
-  SendData = <<Head:80, SourceIp:32, DestIp:32>>,
-  SendCheckSum = checksum(SendData, 16#0000),
-  case get_dest_ip(DestIp) of
-    not_found_dest_ip ->
-      false;
-    {IfName, NextIp} ->
-      ethernet:send_packet(
-        <<Head:80, SendCheckSum:16, SourceIp:32, DestIp:32, Other/bitstring>>,
-        {IfName, NextIp}
-      )
-  end.
-
 %%--------------------------------------------------------------------
 %
 % is self ip
 %
 is_self_ip(<<D1, D2, D3, D4>>) ->
-  case interface:match({'_', '$1', {D1, D2, D3, D4}, '_', '_'}) of
+  case interface:match({'_', '$1', {D1, D2, D3, D4}, '_', '_', '_'}) of
     [] ->
       false;
     _ ->
@@ -204,12 +209,12 @@ match_dest_ip([{_, _, _, Ip, _, Subnetmask, Ad, Metric, Nexthop, _, If}| Tail],
 %
 set_direct_routing_table([], List) ->
   List;
-set_direct_routing_table([{_, _, ?SELEF_IP, _, _}| Tail], List) ->
+set_direct_routing_table([{_, _, ?SELEF_IP, _, _, _}| Tail], List) ->
   set_direct_routing_table(Tail, List);
-set_direct_routing_table([{_, _, IP, Netmask, _}| Tail], List)
+set_direct_routing_table([{_, _, IP, Netmask, _, _}| Tail], List)
                         when IP =:= undefined; Netmask =:= undefind ->
   set_direct_routing_table(Tail, List);
-set_direct_routing_table([{_, Name, {I1, I2, I3, I4}, {S1, S2, S3, S4}, _}| Tail], List) ->
+set_direct_routing_table([{_, Name, {I1, I2, I3, I4}, {S1, S2, S3, S4}, _, _}| Tail], List) ->
   <<DestIp:32>> =  <<I1, I2, I3, I4>>,
   <<Subnetmask:32>> = <<S1, S2, S3, S4>>,
   Mask = DestIp band Subnetmask,
