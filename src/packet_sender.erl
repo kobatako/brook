@@ -6,8 +6,6 @@
 -module(packet_sender).
 -behaviour(gen_server).
 
--include("arp.hrl").
-
 % hardware type
 -define(ETHERNET, 16#0001).
 -define(ETH_P_IP, 16#0008).

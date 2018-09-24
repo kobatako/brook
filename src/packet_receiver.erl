@@ -13,7 +13,8 @@
 %% API
 %%====================================================================
 
-start_link(FD) -> gen_event:start_link({local, receiver}), gen_event:start({local, receiver}),
+start_link(FD) ->
+  gen_event:start_link({local, receiver}), gen_event:start({local, receiver}),
   gen_event:add_handler(receiver, ?MODULE, [FD]).
 
 %%--------------------------------------------------------------------

@@ -30,6 +30,7 @@ send_packet(Data, {IfName, NextIp}) ->
   case arp:get_mac_addr({IfName, NextIp}) of
     undefined ->
       arp:request_arp(IfName, NextIp),
+      gen_server:cast(arp_pooling, {save_pooling, {Data, IfName, NextIp}}),
       false;
     DestMac when is_tuple(DestMac) ->
       packet_sender:send_packet(ip_request, {IfName, tuple_to_list(DestMac), Data});
