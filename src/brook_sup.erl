@@ -38,6 +38,7 @@ init([FD]) ->
       }
     ],
     packet_receiver:start_link(FD),
+    arp_pooling:start_link(10),
     {ok, { {one_for_one, 60, 3600}, ChildSpecs} }.
 
 %%====================================================================
