@@ -20,6 +20,7 @@
 -define(OPTION_RESPONSE, 16#0002).
 
 -export([init/0, get_mac_addr/1, packet/1]).
+-export([save_from_arp/2]).
 -export([request_arp/2]).
 -export([table/0, table/1]).
 
@@ -43,6 +44,7 @@ get_mac_addr({If, Nexthop}) ->
       DestMac
   end.
 
+%%--------------------------------------------------------------------
 %
 % arp response packet
 %
@@ -63,14 +65,15 @@ packet(<<?ETHERNET:16, _:16, _, _, ?OPTION_RESPONSE:16,
 packet(_) ->
   true.
 
+%%--------------------------------------------------------------------
 %
 % arp request
 %
 request_arp(If, Nexthop) ->
-  case interface:match({'_', If, '$1', '_', '$2'}) of
+  case interface:match({'_', If, '$1', '_', '$2', '_'}) of
     [] ->
       false;
-    [{_, _, SourceIp, _, SourceMacAddr}] ->
+    [{_, _, SourceIp, _, SourceMacAddr, _}] ->
       ARPHeader = to_binary(#arp_header{
         hw_type=?ETHERNET, protocol=16#0800, address_len=16#06, protocol_len=16#04,
         operation_code=16#0001,
@@ -81,11 +84,47 @@ request_arp(If, Nexthop) ->
       gen_server:cast(packet_sender, {arp_request, {If, ARPHeader}})
   end.
 
+%%--------------------------------------------------------------------
+%
+% save from arp
+% save the source ip as ip protocol and direct connected network interface
+%
+save_from_arp(
+  <<_:48, SM1, SM2, SM3, SM4, SM5, SM6, _/bitstring>>,
+  <<_:96, SourceAddr:32, _/bitstring>>
+) ->
+  case mnesia:dirty_match_object(arp_table,
+    {'_', '$1', '$2', {SM1, SM2, SM3, SM4, SM5, SM6}, '_'}
+  ) of
+    [] ->
+      case interface:match_network(SourceAddr) of
+        not_match ->
+          not_save;
+        #{addr:=Addr} ->
+          <<S1, S2, S3, S4>> = <<SourceAddr:32>>,
+          ArpTable = #arp_table{source_ip_addr=Addr,
+              dest_ip_addr={S1, S2, S3, S4},
+              dest_mac_addr={SM1, SM2, SM3, SM4, SM5, SM6},
+              type=?ETHERNET
+          },
+          io:format("save arp table: ~p~n", [ArpTable]),
+          mnesia:transaction(fun() ->
+            mnesia:write(arp_table, ArpTable, write)
+          end)
+      end;
+    _ ->
+      true
+  end;
+save_from_arp(_, _) ->
+  false.
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
 
+save_network_address_arp_table() ->
+
+%%--------------------------------------------------------------------
 %
 % arp response packet
 %

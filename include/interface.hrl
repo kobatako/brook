@@ -2,7 +2,8 @@
   name,
   addr,
   netmask,
-  hw_addr
+  hw_addr,
+  netaddr
 }).
 
 -define(ETH_P_ALL, 16#0300).

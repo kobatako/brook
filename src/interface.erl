@@ -1,3 +1,7 @@
+%%%-------------------------------------------------------------------
+%% @doc brook interface
+%% @end
+%%%-------------------------------------------------------------------
 -module(interface).
 
 -include("interface.hrl").
@@ -5,6 +9,7 @@
 -export([init/0]).
 -export([list/0]).
 -export([match/1]).
+-export([match_network/1]).
 
 %%====================================================================
 %% API
@@ -12,32 +17,45 @@
 
 init() ->
   {ok, IF} = inet:getifaddrs(),
-  Listen = [interface_list(Elm) || Elm <- IF],
-  % Interface = ets:new(interface, [set, public, {keypos, #interface.name}, named_table]),
+  Lists = [interface_list(Elm) || Elm <- IF],
   mnesia:create_table(interface, [{attributes, record_info(fields, interface)}]),
-  save_interface(Listen),
-  make_bind(Listen, []).
+  save_interface(Lists),
+  make_bind(Lists, []).
 
 list() ->
-  mnesia:dirty_match_object(interface, {'$1', '$2', '$3', '$4', '$5'}).
+  mnesia:dirty_match_object(interface, {'$1', '$2', '$3', '$4', '$5', '$6'}).
 
 match(Match) ->
   mnesia:dirty_match_object(interface, Match).
+
+match_network(Addr) ->
+  fetch_interface_network(list(), Addr).
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
 
+fetch_interface_network([], _) ->
+  not_match;
+fetch_interface_network([#interface{netaddr=NetAddr,addr=IfAddr}=If| Tail], Addr) ->
+  case NetAddr band Addr of
+   NetAddr ->
+      #{addr=>IfAddr};
+    _ ->
+      fetch_interface_network(Tail, Addr)
+  end.
+
+%%--------------------------------------------------------------------
 % make bind file descriptor
 make_bind([],  Res) ->
   Res;
-make_bind([{interface, _, undefined, _, _}| Tail], Res) ->
+make_bind([{interface, _, undefined, _, _, _}| Tail], Res) ->
   make_bind(Tail, Res);
-make_bind([{interface, _, _, undefined, _}| Tail], Res) ->
+make_bind([{interface, _, _, undefined, _, _}| Tail], Res) ->
   make_bind(Tail, Res);
-make_bind([{interface, _, ?SELEF_IP, _, _}| Tail], Res) ->
+make_bind([{interface, _, ?SELEF_IP, _, _, _}| Tail], Res) ->
   make_bind(Tail, Res);
-make_bind([{_, IfName, _, _, MacAddr}|Tail], Res) ->
+make_bind([{_, IfName, _, _, MacAddr, _}|Tail], Res) ->
   {ok, IPFD} = procket:open(0, [
     {protocol, ?ETH_P_ALL},
     {type, raw},
@@ -47,7 +65,9 @@ make_bind([{_, IfName, _, _, MacAddr}|Tail], Res) ->
   make_bind(Tail, [#{if_name => IfName, ip_fd => IPFD, mac_addr => MacAddr}| Res]).
 
 %%--------------------------------------------------------------------
-
+%
+%
+%
 save_interface([]) ->
   true;
 save_interface([Head| Tail]) ->
@@ -79,9 +99,10 @@ interface_list(Elm) ->
 %%--------------------------------------------------------------------
 %
 % interface option
+% set interface option, macaddress, ip address and netmask
 %
 interface_opt([], Opt) ->
-  Opt;
+  interface_opt_netaddr(Opt);
 interface_opt([Head| Tail], Opt) ->
   Res = case Head of
     {hwaddr, Hwaddr} ->
@@ -96,4 +117,23 @@ interface_opt([Head| Tail], Opt) ->
       Opt
   end,
   interface_opt(Tail, Res).
+
+%%--------------------------------------------------------------------
+%
+% interface option
+% set interface option, netaddress.
+%
+interface_opt_netaddr(#interface{
+  addr = Addr,
+  netmask = Netmask}=Opt
+) when Addr =:= undefined; Netmask =:= undefined ->
+  Opt#interface{netaddr=undefined};
+
+interface_opt_netaddr(#interface{
+  addr = {A1, A2, A3, A4}=Addr,
+  netmask = {N1, N2, N3, N4}=Netmask}=Opt
+) ->
+  <<A:32>> = <<A1, A2, A3, A4>>,
+  <<N:32>> = <<N1, N2, N3, N4>>,
+  Opt#interface{netaddr=A band N}.
 

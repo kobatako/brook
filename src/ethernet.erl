@@ -10,9 +10,9 @@ receive_packet(<<_:48, SourceMacAddr:48, Type:16, Data/bitstring>>=Buf) ->
   <<S1, S2, S3, S4, S5, S6>> = <<SourceMacAddr:48>>,
   % where send packet
   % Sender himself
-  case interface:match({interface, '$1', '$2', '$3', [S1, S2, S3, S4, S5, S6]}) of
+  case interface:match({interface, '$1', '$2', '$3', [S1, S2, S3, S4, S5, S6], '_'}) of
     [] ->
-      ethernet_type(Type, Data);
+      ethernet_type(Type, Buf);
     _ ->
       source_self_mac_address
   end.
@@ -22,6 +22,8 @@ send_packet(Data, {IfName, NextIp}) ->
     undefined ->
       arp:request_arp(IfName, NextIp),
       false;
+    DestMac when is_tuple(DestMac) ->
+      gen_server:cast(packet_sender, {ip_request, {IfName, tuple_to_list(DestMac), Data}});
     DestMac ->
       gen_server:cast(packet_sender, {ip_request, {IfName, DestMac, Data}})
   end.
@@ -33,12 +35,13 @@ send_packet(Data, {IfName, NextIp}) ->
 
 %%--------------------------------------------------------------------
 % IP Protocol
-ethernet_type(?TYPE_IP, Data) ->
+ethernet_type(?TYPE_IP, <<Ether:112, Data/bitstring>>) ->
+  arp:save_from_arp(<<Ether:112>>, Data),
   ip:receive_packet(Data);
 
 %%--------------------------------------------------------------------
 % ARP Protocol
-ethernet_type(?TYPE_ARP, Data) ->
+ethernet_type(?TYPE_ARP, <<_:112, Data/bitstring>>) ->
   arp:packet(Data);
 
 %%--------------------------------------------------------------------
