@@ -20,6 +20,7 @@ start(_StartType, _StartArgs) ->
   Listen = interface:init(),
   arp:init(),
   ip:init(),
+  pipeline:init(),
   brook_sup:start_link(Listen).
 
 %%--------------------------------------------------------------------
