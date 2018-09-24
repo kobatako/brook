@@ -15,6 +15,10 @@
 %% API
 %%====================================================================
 
+%%--------------------------------------------------------------------
+%
+% receive packet
+%
 receive_packet(<<_:48, SourceMacAddr:48, Type:16, _/bitstring>>=Buf) ->
   <<S1, S2, S3, S4, S5, S6>> = <<SourceMacAddr:48>>,
   % where send packet
@@ -26,31 +30,55 @@ receive_packet(<<_:48, SourceMacAddr:48, Type:16, _/bitstring>>=Buf) ->
       source_self_mac_address
   end.
 
-send_packet(Data, {IfName, NextIp}) ->
+%%--------------------------------------------------------------------
+%
+% send packet
+%
+send_packet(Data, #{if_name:=IfName, next_ip:=NextIp}=Opt) ->
   case arp:get_mac_addr({IfName, NextIp}) of
     undefined ->
       arp:request_arp(IfName, NextIp),
       gen_server:cast(arp_pooling, {save_pooling, {Data, IfName, NextIp}}),
       false;
     DestMac when is_tuple(DestMac) ->
-      packet_sender:send_packet(ip_request, {IfName, tuple_to_list(DestMac), Data});
+      packet_after_filter(Data, Opt#{dest_mac=>tuple_to_list(DestMac)});
     DestMac when is_list(DestMac) ->
-      packet_sender:send_packet(ip_request, {IfName, DestMac, Data})
+      packet_after_filter(Data, Opt#{dest_mac=>DestMac})
   end.
-
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
 
 %%--------------------------------------------------------------------
-% IP Protocol
-ethernet_type(?TYPE_IP, <<Ether:112, Data/bitstring>>) ->
-  arp:save_from_arp(<<Ether:112>>, Data),
-  ip:receive_packet(Data);
+%
+% packet after filter
+%
+packet_after_filter(Data, Opt) ->
+  case pipeline:after_ip_filter(Data, Opt) of
+    {error, Msg} ->
+      {error, Msg};
+    {ok, Data, ResOpt} ->
+      packet_sender:send_packet(ip_request, {Data, ResOpt})
+  end.
 
 %%--------------------------------------------------------------------
+%
+% IP Protocol
+%
+ethernet_type(?TYPE_IP, <<Ether:112, Data/bitstring>>) ->
+  arp:save_from_arp(<<Ether:112>>, Data),
+  case pipeline:before_ip_filter(Data) of
+    {error, Msg} ->
+      {error, Msg};
+    {ok, Data, Opt} ->
+      apply(ip, receive_packet, [Data, Opt])
+  end;
+
+%%--------------------------------------------------------------------
+%
 % ARP Protocol
+%
 ethernet_type(?TYPE_ARP, <<_:112, Data/bitstring>>) ->
   arp:packet(Data);
 

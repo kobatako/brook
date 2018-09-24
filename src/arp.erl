@@ -79,7 +79,7 @@ request_arp(If, Nexthop) ->
         dest_mac_addr=[16#00, 16#00, 16#00, 16#00, 16#00, 16#00],
         dest_ip_addr=tuple_to_list(Nexthop)
       }),
-      packet_sender:send_packet(arp_request, {If, ARPHeader})
+      packet_sender:send_packet(arp_request, {ARPHeader, If})
   end.
 
 %%--------------------------------------------------------------------
@@ -117,6 +117,10 @@ save_from_arp(_, _) ->
 %% Internal functions
 %%====================================================================
 
+%%--------------------------------------------------------------------
+%
+% save arp table
+%
 save_arp_table(ArpTable) ->
   mnesia:transaction(fun() ->
     mnesia:write(arp_table, ArpTable, write)

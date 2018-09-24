@@ -16,8 +16,8 @@
 -define(DEFAULT_ROUTE, 255).
 
 -export([init/0]).
--export([receive_packet/1]).
--export([send_packet/1]).
+-export([receive_packet/2]).
+-export([send_packet/2]).
 -export([route/1]).
 -export([route/3]).
 
@@ -50,14 +50,14 @@ init() ->
 
 %%--------------------------------------------------------------------
 % receive packet
-receive_packet(<<_:128, DestIp:32, _/bitstring>> = Data) ->
-  receiver_ip(is_self_ip(<<DestIp:32>>), Data).
+receive_packet(<<_:128, DestIp:32, _/bitstring>> = Data, Opt) ->
+  receiver_ip(is_self_ip(<<DestIp:32>>), Data, Opt).
 
 %%--------------------------------------------------------------------
 % send packet
-send_packet(<<_:64, 0, _:16, _SourceIp:32, _DestIp:32, _Other/bitstring>>) ->
+send_packet(<<_:64, 0, _:16, _SourceIp:32, _DestIp:32, _Other/bitstring>>, _) ->
   not_send_packet;
-send_packet(<<Head:80, _:16, SourceIp:32, DestIp:32, Other/bitstring>>) ->
+send_packet(<<Head:80, _:16, SourceIp:32, DestIp:32, Other/bitstring>>, Opt) ->
   SendData = <<Head:80, SourceIp:32, DestIp:32>>,
   SendCheckSum = checksum(SendData, 16#0000),
   case get_dest_ip(DestIp) of
@@ -66,7 +66,7 @@ send_packet(<<Head:80, _:16, SourceIp:32, DestIp:32, Other/bitstring>>) ->
     {IfName, NextIp} ->
       ethernet:send_packet(
         <<Head:80, SendCheckSum:16, SourceIp:32, DestIp:32, Other/bitstring>>,
-        {IfName, NextIp}
+        Opt#{if_name=>IfName, next_ip=>NextIp}
       )
   end.
 
@@ -102,16 +102,16 @@ route(add, static, #{dest_route := {D1, D2, D3, D4}, subnetmask := {S1, S2, S3, 
 
 %%--------------------------------------------------------------------
 % self ip
-receiver_ip(true, _) ->
+receiver_ip(true, _, _) ->
   false;
 % other ip
 % icmp protocol
-receiver_ip(false, <<Head:64, TTL, 1, Other/bitstring>>) ->
-  icmp:receive_packet(<<Head:64, (TTL-1), 1, Other/bitstring>>);
+receiver_ip(false, <<Head:64, TTL, 1, Other/bitstring>>, Opt) ->
+  icmp:receive_packet(<<Head:64, (TTL-1), 1, Other/bitstring>>, Opt);
 
 % other protocol
-receiver_ip(false, <<Head:64, TTL, Other/bitstring>>) ->
-  send_packet(<<Head:64, (TTL-1), Other/bitstring>>).
+receiver_ip(false, <<Head:64, TTL, Other/bitstring>>, Opt) ->
+  send_packet(<<Head:64, (TTL-1), Other/bitstring>>, Opt).
 
 %%--------------------------------------------------------------------
 %

@@ -54,14 +54,14 @@ send_packet(ip_request, SendData) ->
 send_packet(arp_request, SendData) ->
   gen_server:cast(packet_sender, {arp_request, SendData}).
 
-handle_cast({arp_request, {IfName, ArpData}}, State) ->
+handle_cast({arp_request, {ArpData, IfName}}, State) ->
   #{ip_fd := FD, mac_addr := MacAddr} = get_interface_fd(State, IfName),
   arp_request(FD, MacAddr, ArpData),
   {noreply, State};
 
-handle_cast({ip_request, {IfName, DestMac, IpData}}, State) ->
+handle_cast({ip_request, {IpData, #{if_name := IfName}=Opt}}, State) ->
   #{ip_fd := FD, mac_addr := SourceMac} = get_interface_fd(State, IfName),
-  ip_request(FD, SourceMac, DestMac, IpData),
+  ip_request(FD, Opt#{source_mac => SourceMac}, IpData),
   {noreply, State};
 
 handle_cast(_, State) ->
@@ -89,29 +89,31 @@ get_interface_fd([_| Tail], IfName) ->
 arp_request(FD, HwAddr, ARPHeader) ->
   Ethernet = ethernet_to_binary(#ethernet_header{source_mac_addr=HwAddr,
               dest_mac_addr=[16#ff, 16#ff, 16#ff, 16#ff, 16#ff, 16#ff], type=?TYPE_ARP}),
-  request(FD, <<Ethernet/bitstring, ARPHeader/bitstring>>).
+  request(FD, <<Ethernet/bitstring, ARPHeader/bitstring>>, #{}).
 
 %%--------------------------------------------------------------------
 %
 % ip request
 %
-ip_request(FD, SourceMac, DestMac, Data) ->
+ip_request(FD, #{source_mac := SourceMac, dest_mac := DestMac}=Opt, Data) ->
   Ethernet = ethernet_to_binary(#ethernet_header{
                                   source_mac_addr=SourceMac,
                                   dest_mac_addr=DestMac,
                                   type=?TYPE_IP}
   ),
-  request(FD, <<Ethernet/bitstring, Data/bitstring>>).
+  request(FD, <<Ethernet/bitstring, Data/bitstring>>, Opt).
 
 %%--------------------------------------------------------------------
 %
 % request send packet
 %
-request(FD, Buf) ->
+request(FD, Buf, Opt) ->
   case procket:write(FD, Buf) of
     ok ->
+      pipeline:after_send_packet(Buf, Opt),
       true;
     {ok, _} ->
+      pipeline:after_send_packet(Buf, Opt),
       true;
     {error, _} ->
       false
