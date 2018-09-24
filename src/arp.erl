@@ -36,7 +36,7 @@ table() ->
 table(show) ->
   mnesia:dirty_match_object(arp_table, {'_', '$1', '$2', '$3', '$4'}).
 
-get_mac_addr({If, Nexthop}) ->
+get_mac_addr({_, Nexthop}) ->
   case mnesia:dirty_match_object(arp_table, {'_', '$1', Nexthop, '$2', '_'}) of
     [] ->
       undefined;
@@ -59,9 +59,7 @@ packet(<<?ETHERNET:16, _:16, _, _, ?OPTION_RESPONSE:16,
       dest_mac_addr={SM1, SM2, SM3, SM4, SM5, SM6},
       type=?ETHERNET
   },
-  mnesia:transaction(fun() ->
-    mnesia:write(arp_table, ArpTable, write)
-  end);
+  save_arp_table(ArpTable);
 packet(_) ->
   true.
 
@@ -81,7 +79,7 @@ request_arp(If, Nexthop) ->
         dest_mac_addr=[16#00, 16#00, 16#00, 16#00, 16#00, 16#00],
         dest_ip_addr=tuple_to_list(Nexthop)
       }),
-      gen_server:cast(packet_sender, {arp_request, {If, ARPHeader}})
+      packet_sender:send_packet(arp_request, {If, ARPHeader})
   end.
 
 %%--------------------------------------------------------------------
@@ -107,10 +105,7 @@ save_from_arp(
               dest_mac_addr={SM1, SM2, SM3, SM4, SM5, SM6},
               type=?ETHERNET
           },
-          io:format("save arp table: ~p~n", [ArpTable]),
-          mnesia:transaction(fun() ->
-            mnesia:write(arp_table, ArpTable, write)
-          end)
+          save_arp_table(ArpTable)
       end;
     _ ->
       true
@@ -122,7 +117,10 @@ save_from_arp(_, _) ->
 %% Internal functions
 %%====================================================================
 
-save_network_address_arp_table() ->
+save_arp_table(ArpTable) ->
+  mnesia:transaction(fun() ->
+    mnesia:write(arp_table, ArpTable, write)
+  end).
 
 %%--------------------------------------------------------------------
 %

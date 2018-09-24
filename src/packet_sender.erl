@@ -19,6 +19,7 @@
 
 %% Supervisor callbacks
 -export([init/1]).
+-export([send_packet/2]).
 -export([terminate/2]).
 -export([handle_info/2]).
 -export([handle_cast/2]).
@@ -48,6 +49,12 @@ terminate(_Message, _Storage) ->
 
 handle_call(?MODULE, _, _) ->
   true.
+
+send_packet(ip_request, SendData) ->
+  gen_server:cast(packet_sender, {ip_request, SendData});
+
+send_packet(arp_request, SendData) ->
+  gen_server:cast(packet_sender, {arp_request, SendData}).
 
 handle_cast({arp_request, {IfName, ArpData}}, State) ->
   #{ip_fd := FD, mac_addr := MacAddr} = get_interface_fd(State, IfName),

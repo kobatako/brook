@@ -37,7 +37,7 @@ match_network(Addr) ->
 
 fetch_interface_network([], _) ->
   not_match;
-fetch_interface_network([#interface{netaddr=NetAddr,addr=IfAddr}=If| Tail], Addr) ->
+fetch_interface_network([#interface{netaddr=NetAddr, addr=IfAddr}| Tail], Addr) ->
   case NetAddr band Addr of
    NetAddr ->
       #{addr=>IfAddr};
@@ -75,18 +75,6 @@ save_interface([Head| Tail]) ->
     mnesia:write(interface, Head, write)
   end),
   save_interface(Tail).
-
-%%--------------------------------------------------------------------
-%%
-%% debug print interface
-%%
-print_interface(IF, Interface) ->
-  case ets:next(Interface, IF) of
-    '$end_of_table' ->
-      true;
-    Next ->
-      print_interface(Next, Interface)
-  end.
 
 %%--------------------------------------------------------------------
 %
@@ -130,9 +118,9 @@ interface_opt_netaddr(#interface{
   Opt#interface{netaddr=undefined};
 
 interface_opt_netaddr(#interface{
-  addr = {A1, A2, A3, A4}=Addr,
-  netmask = {N1, N2, N3, N4}=Netmask}=Opt
-) ->
+  addr = {A1, A2, A3, A4},
+  netmask = {N1, N2, N3, N4}
+}=Opt) ->
   <<A:32>> = <<A1, A2, A3, A4>>,
   <<N:32>> = <<N1, N2, N3, N4>>,
   Opt#interface{netaddr=A band N}.
