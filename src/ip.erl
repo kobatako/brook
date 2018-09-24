@@ -55,7 +55,7 @@ receive_packet(<<_:128, DestIp:32, _/bitstring>> = Data) ->
 
 %%--------------------------------------------------------------------
 % send packet
-send_packet(<<Head:64, 0, _:16, SourceIp:32, DestIp:32, Other/bitstring>>) ->
+send_packet(<<_:64, 0, _:16, _SourceIp:32, _DestIp:32, _Other/bitstring>>) ->
   not_send_packet;
 send_packet(<<Head:80, _:16, SourceIp:32, DestIp:32, Other/bitstring>>) ->
   SendData = <<Head:80, SourceIp:32, DestIp:32>>,
@@ -78,7 +78,7 @@ route(show) ->
 %%--------------------------------------------------------------------
 % show route
 route(add, static, #{dest_route := {D1, D2, D3, D4}, subnetmask := {S1, S2, S3, S4},
-      nexthop := Nexthop, out_interface := OutInterface}=Opt) ->
+      nexthop := Nexthop, out_interface := OutInterface}) ->
   <<DestRoute:32>> = <<D1, D2, D3, D4>>,
   <<Subnetmask:32>> = <<S1, S2, S3, S4>>,
   RoutingTable = #routing_table{
@@ -106,7 +106,7 @@ receiver_ip(true, _) ->
   false;
 % other ip
 % icmp protocol
-receiver_ip(false, <<Head:64, TTL, 1, Other/bitstring>>=Data) ->
+receiver_ip(false, <<Head:64, TTL, 1, Other/bitstring>>) ->
   icmp:receive_packet(<<Head:64, (TTL-1), 1, Other/bitstring>>);
 
 % other protocol

@@ -1,3 +1,8 @@
+%%%-------------------------------------------------------------------
+%% @doc brook ethernet
+%% @end
+%%%-------------------------------------------------------------------
+
 -module(ethernet).
 
 -export([receive_packet/1]).
@@ -6,7 +11,11 @@
 -define(TYPE_ARP,  16#0806).
 -define(TYPE_IP, 16#0800).
 
-receive_packet(<<_:48, SourceMacAddr:48, Type:16, Data/bitstring>>=Buf) ->
+%%====================================================================
+%% API
+%%====================================================================
+
+receive_packet(<<_:48, SourceMacAddr:48, Type:16, _/bitstring>>=Buf) ->
   <<S1, S2, S3, S4, S5, S6>> = <<SourceMacAddr:48>>,
   % where send packet
   % Sender himself
@@ -23,9 +32,9 @@ send_packet(Data, {IfName, NextIp}) ->
       arp:request_arp(IfName, NextIp),
       false;
     DestMac when is_tuple(DestMac) ->
-      gen_server:cast(packet_sender, {ip_request, {IfName, tuple_to_list(DestMac), Data}});
-    DestMac ->
-      gen_server:cast(packet_sender, {ip_request, {IfName, DestMac, Data}})
+      packet_sender:send_packet(ip_request, {IfName, tuple_to_list(DestMac), Data});
+    DestMac when is_list(DestMac) ->
+      packet_sender:send_packet(ip_request, {IfName, DestMac, Data})
   end.
 
 
