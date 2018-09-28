@@ -7,6 +7,7 @@
 
 -export([receive_packet/1]).
 -export([send_packet/2]).
+-export([trance_to_tuple_mac_addr/1]).
 
 -define(TYPE_ARP,  16#0806).
 -define(TYPE_IP, 16#0800).
@@ -23,7 +24,7 @@ receive_packet(<<_:48, SourceMacAddr:48, Type:16, _/bitstring>>=Buf) ->
   <<S1, S2, S3, S4, S5, S6>> = <<SourceMacAddr:48>>,
   % where send packet
   % Sender himself
-  case interface:match({interface, '$1', '$2', '$3', [S1, S2, S3, S4, S5, S6], '_'}) of
+  case interface:match({interface, '$1', '$2', '$3', {S1, S2, S3, S4, S5, S6}, '_'}) of
     [] ->
       ethernet_type(Type, Buf);
     _ ->
@@ -46,6 +47,20 @@ send_packet(Data, #{if_name:=IfName, next_ip:=NextIp}=Opt) ->
       packet_after_filter(Data, Opt#{dest_mac=>DestMac})
   end.
 
+%%--------------------------------------------------------------------
+% trance mac addr
+trance_to_tuple_mac_addr([D1, D2, D3, D4, D5, D6]) ->
+  {D1, D2, D3 ,D4, D5, D6};
+trance_to_tuple_mac_addr(MacAddr) when is_bitstring(MacAddr) ->
+  <<D1, D2, D3, D4, D5, D6>> = <<MacAddr:48>>,
+  {D1, D2, D3 ,D4, D5, D6};
+trance_to_tuple_mac_addr(MacAddr) when is_binary(MacAddr) ->
+  <<D1, D2, D3, D4, D5, D6>> = <<MacAddr:48>>,
+  {D1, D2, D3 ,D4, D5, D6};
+trance_to_tuple_mac_addr(MacAddr) when is_integer(MacAddr) ->
+  <<D1, D2, D3, D4, D5, D6>> = <<MacAddr:48>>,
+  {D1, D2, D3 ,D4, D5, D6}.
+
 %%====================================================================
 %% Internal functions
 %%====================================================================
@@ -66,9 +81,10 @@ packet_after_filter(Data, Opt) ->
 %
 % IP Protocol
 %
-ethernet_type(?TYPE_IP, <<Ether:112, Data/bitstring>>) ->
-  arp:save_from_arp(<<Ether:112>>, Data),
-  case pipeline:before_ip_filter(Data) of
+ethernet_type(?TYPE_IP, <<DestMacAddr:48, SourceMacAddr:48, Type:16, Data/bitstring>>) ->
+  arp:save_from_arp(<<DestMacAddr:48, SourceMacAddr:48, Type:16>>, Data),
+  Opt = #{recv => #{dest_mac_addr =>trance_to_tuple_mac_addr(DestMacAddr), source_mac_addr => trance_to_tuple_mac_addr(SourceMacAddr), type => Type}},
+  case pipeline:before_ip_filter(Data, Opt) of
     {error, Msg} ->
       {error, Msg};
     {ok, Data, Opt} ->

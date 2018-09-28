@@ -117,8 +117,8 @@ receiver_ip(false, <<Head:64, TTL, Other/bitstring>>, Opt) ->
 %
 % is self ip
 %
-is_self_ip(<<D1, D2, D3, D4>>) ->
-  case interface:match({'_', '$1', {D1, D2, D3, D4}, '_', '_', '_'}) of
+is_self_ip(Dest) ->
+  case interface:match({'_', '$1', trance_to_tuple_ip_addr(Dest), '_', '_', '_'}) of
     [] ->
       false;
     _ ->
@@ -134,8 +134,7 @@ get_dest_ip(DestIp) ->
     {} ->
       not_found_dest_ip;
     {If, ?NEXTHOP_DIRECT, _, _, _} ->
-      <<N1, N2, N3, N4>> = <<DestIp:32>>,
-      {If, {N1, N2, N3, N4}};
+      {If, trance_to_tuple_ip_addr(DestIp)};
     {If, Nexthop, _, _, _} ->
       {If, Nexthop}
   end.
@@ -214,16 +213,15 @@ set_direct_routing_table([{_, _, ?SELEF_IP, _, _, _}| Tail], List) ->
 set_direct_routing_table([{_, _, IP, Netmask, _, _}| Tail], List)
                         when IP =:= undefined; Netmask =:= undefind ->
   set_direct_routing_table(Tail, List);
-set_direct_routing_table([{_, Name, {I1, I2, I3, I4}, {S1, S2, S3, S4}, _, _}| Tail], List) ->
-  <<DestIp:32>> =  <<I1, I2, I3, I4>>,
-  <<Subnetmask:32>> = <<S1, S2, S3, S4>>,
+set_direct_routing_table([{_, Name, Dest, Subnet, _, _}| Tail], List) ->
+  DestIp =  trance_to_integer_ip_addr(Dest),
+  Subnetmask = trance_to_integer_ip_addr(Subnet),
   Mask = DestIp band Subnetmask,
-  <<M1, M2, M3, M4>> = <<Mask:32>>,
   set_to_routing_table(#routing_table{
     source_route=?SOURCE_DIRECT,
-    dest_route={M1, M2, M3, M4},
+    dest_route=trance_to_tuple_ip_addr(Mask),
     dest_route_int=Mask,
-    subnetmask={S1, S2, S3, S4},
+    subnetmask=Subnet,
     subnetmask_int=Subnetmask,
     ad=0,
     metric=0,
@@ -246,6 +244,33 @@ set_to_routing_table(#routing_table{dest_route=Ip, subnetmask=Netmask} = Routing
     mnesia:write(routing_table, RoutingTable, write)
   end).
 
+%%--------------------------------------------------------------------
+%
+%  all routing table
+%
 all_routing_table() ->
   mnesia:dirty_match_object(routing_table,
     {'_', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9', '$10', '$11'}).
+
+%%--------------------------------------------------------------------
+%
+% trance to integer ip addr
+%
+trance_to_integer_ip_addr({I1, I2, I3, I4}) ->
+  <<Ip:32>> =  <<I1, I2, I3, I4>>,
+  Ip;
+trance_to_integer_ip_addr(_) ->
+  undefined.
+
+%%--------------------------------------------------------------------
+%
+% trance to tuple ip addr
+%
+trance_to_tuple_ip_addr(<<I1, I2, I3, I4>>) ->
+  {I1, I2, I3, I4};
+trance_to_tuple_ip_addr(Ip) when is_integer(Ip) ->
+  <<I1, I2, I3, I4>> = <<Ip:32>>,
+  {I1, I2, I3, I4};
+trance_to_tuple_ip_addr(_) ->
+  undefined.
+

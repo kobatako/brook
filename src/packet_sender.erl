@@ -33,27 +33,54 @@
 %% API
 %%====================================================================
 
+%%--------------------------------------------------------------------
+%
+% start link
+%
 start_link([FD]) ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [FD], []).
 
+%%--------------------------------------------------------------------
+%
+% init
+%
 init([FD]) ->
   {ok, FD}.
 
+%%--------------------------------------------------------------------
+%
+% handle info
+%
 handle_info(_Message, Storage) ->
   {noreply, Storage}.
 
+%%--------------------------------------------------------------------
+%
+% terminate
+%
 terminate(_Message, _Storage) ->
   ok.
 
+%%--------------------------------------------------------------------
+%
+% handle call
+%
 handle_call(?MODULE, _, _) ->
   true.
 
+%%--------------------------------------------------------------------
+%
+% send packet
+%
 send_packet(ip_request, SendData) ->
   gen_server:cast(packet_sender, {ip_request, SendData});
-
 send_packet(arp_request, SendData) ->
   gen_server:cast(packet_sender, {arp_request, SendData}).
 
+%%--------------------------------------------------------------------
+%
+% get interface fd
+%
 handle_cast({arp_request, {ArpData, IfName}}, State) ->
   #{ip_fd := FD, mac_addr := MacAddr} = get_interface_fd(State, IfName),
   arp_request(FD, MacAddr, ArpData),
@@ -87,7 +114,7 @@ get_interface_fd([_| Tail], IfName) ->
 %% @doc request arp
 %%
 arp_request(FD, HwAddr, ARPHeader) ->
-  Ethernet = ethernet_to_binary(#ethernet_header{source_mac_addr=HwAddr,
+  Ethernet = ethernet_to_binary(#ethernet_header{source_mac_addr=tuple_to_list(HwAddr),
               dest_mac_addr=[16#ff, 16#ff, 16#ff, 16#ff, 16#ff, 16#ff], type=?TYPE_ARP}),
   request(FD, <<Ethernet/bitstring, ARPHeader/bitstring>>, #{}).
 
@@ -97,7 +124,7 @@ arp_request(FD, HwAddr, ARPHeader) ->
 %
 ip_request(FD, #{source_mac := SourceMac, dest_mac := DestMac}=Opt, Data) ->
   Ethernet = ethernet_to_binary(#ethernet_header{
-                                  source_mac_addr=SourceMac,
+                                  source_mac_addr=tuple_to_list(SourceMac),
                                   dest_mac_addr=DestMac,
                                   type=?TYPE_IP}
   ),
