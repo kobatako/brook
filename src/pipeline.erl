@@ -5,7 +5,7 @@
 
 -module(pipeline).
 -export([init/0]).
--export([before_ip_filter/1]).
+-export([before_ip_filter/2]).
 -export([after_ip_filter/2]).
 -export([after_send_packet/2]).
 
@@ -88,11 +88,11 @@ save_after_send_packet(Module, Func) ->
 %
 % before ip filter
 %
-before_ip_filter(Data) ->
+before_ip_filter(Data, Opt) ->
   Filter = mnesia:dirty_match_object(pipeline,
     {'_', ?BEFORE_IP, '$1', '$2'}
   ),
-  filter(Filter, Data, #{}).
+  filter(Filter, Data, Opt).
 
 %%--------------------------------------------------------------------
 %

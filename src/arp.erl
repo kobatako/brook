@@ -75,7 +75,7 @@ request_arp(If, Nexthop) ->
       ARPHeader = to_binary(#arp_header{
         hw_type=?ETHERNET, protocol=16#0800, address_len=16#06, protocol_len=16#04,
         operation_code=16#0001,
-        source_mac_addr=SourceMacAddr, source_ip_addr=tuple_to_list(SourceIp),
+        source_mac_addr=tuple_to_list(SourceMacAddr), source_ip_addr=tuple_to_list(SourceIp),
         dest_mac_addr=[16#00, 16#00, 16#00, 16#00, 16#00, 16#00],
         dest_ip_addr=tuple_to_list(Nexthop)
       }),
