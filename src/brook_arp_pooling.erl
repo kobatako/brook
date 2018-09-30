@@ -6,19 +6,21 @@
 -module(brook_arp_pooling).
 -behavior(gen_server).
 
+-record(state, {
+  packet,
+  interface,
+  nexthop,
+  count
+}).
+
+-type state() ::  #state{}.
+
 -export([start_link/1]).
 -export([init/1]).
 -export([terminate/2]).
 -export([handle_info/2]).
 -export([handle_cast/2]).
 -export([handle_call/3]).
-
--record(arp_pool, {
-  packet,
-  interface,
-  nexthop,
-  count
-}).
 
 %%====================================================================
 %% API
@@ -46,13 +48,13 @@ handle_call({check}, _From, State) ->
 
 handle_cast({save_pooling, {Packet, IfName, Nexthop}}, State) ->
   {noreply, [
-      #arp_pool{packet=Packet, interface=IfName, nexthop=Nexthop, count=0}| State
+      #state{packet=Packet, interface=IfName, nexthop=Nexthop, count=0}| State
   ]}.
 
 check_pool_packet([], Res) ->
   Res;
 check_pool_packet([
-  #arp_pool{packet=Packet, interface=IfName,
+  #state{packet=Packet, interface=IfName,
         nexthop=Nexthop, count=Count}| Tail
 ], Res) ->
   case brook_arp:get_mac_addr({IfName, Nexthop}) of
@@ -61,7 +63,7 @@ check_pool_packet([
     undefined ->
       check_pool_packet(
         Tail,
-        [#arp_pool{packet=Packet, interface=IfName,
+        [#state{packet=Packet, interface=IfName,
         nexthop=Nexthop, count=Count+1}| Res]
       );
     DestMac when is_tuple(DestMac) ->

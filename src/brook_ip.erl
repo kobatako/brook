@@ -16,10 +16,9 @@
 -define(DEFAULT_ROUTE, 255).
 
 -export([init/0]).
+-export([route/1, route/3]).
 -export([receive_packet/2]).
 -export([send_packet/2]).
--export([route/1]).
--export([route/3]).
 
 -record(routing_table, {
   source_route,       % routing learn source

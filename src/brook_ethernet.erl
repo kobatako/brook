@@ -6,8 +6,8 @@
 -module(brook_ethernet).
 
 -export([receive_packet/1]).
--export([send_packet/2]).
 -export([trance_to_tuple_mac_addr/1]).
+-export([send_packet/2]).
 
 -define(TYPE_ARP,  16#0806).
 -define(TYPE_IP, 16#0800).
@@ -50,16 +50,12 @@ send_packet(Data, #{if_name:=IfName, next_ip:=NextIp}=Opt) ->
 %%--------------------------------------------------------------------
 % trance mac addr
 trance_to_tuple_mac_addr([D1, D2, D3, D4, D5, D6]) ->
-  {D1, D2, D3 ,D4, D5, D6};
-trance_to_tuple_mac_addr(MacAddr) when is_bitstring(MacAddr) ->
-  <<D1, D2, D3, D4, D5, D6>> = <<MacAddr:48>>,
-  {D1, D2, D3 ,D4, D5, D6};
-trance_to_tuple_mac_addr(MacAddr) when is_binary(MacAddr) ->
-  <<D1, D2, D3, D4, D5, D6>> = <<MacAddr:48>>,
-  {D1, D2, D3 ,D4, D5, D6};
+  {D1, D2, D3, D4, D5, D6};
+trance_to_tuple_mac_addr(<<D1, D2, D3, D4, D5, D6>>) ->
+  {D1, D2, D3, D4, D5, D6};
 trance_to_tuple_mac_addr(MacAddr) when is_integer(MacAddr) ->
   <<D1, D2, D3, D4, D5, D6>> = <<MacAddr:48>>,
-  {D1, D2, D3 ,D4, D5, D6}.
+  {D1, D2, D3, D4, D5, D6}.
 
 %%====================================================================
 %% Internal functions
@@ -83,7 +79,11 @@ packet_after_filter(Data, Opt) ->
 %
 ethernet_type(?TYPE_IP, <<DestMacAddr:48, SourceMacAddr:48, Type:16, Data/bitstring>>) ->
   brook_arp:save_from_arp(<<DestMacAddr:48, SourceMacAddr:48, Type:16>>, Data),
-  Opt = #{recv => #{dest_mac_addr =>trance_to_tuple_mac_addr(DestMacAddr), source_mac_addr => trance_to_tuple_mac_addr(SourceMacAddr), type => Type}},
+  Opt = #{recv =>#{
+          dest_mac_addr =>trance_to_tuple_mac_addr(DestMacAddr),
+          source_mac_addr => trance_to_tuple_mac_addr(SourceMacAddr),
+          type => Type
+  }},
   case brook_pipeline:before_ip_filter(Data, Opt) of
     {error, Msg} ->
       {error, Msg};

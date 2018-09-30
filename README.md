@@ -1,10 +1,9 @@
 brook
 =====
 
-An OTP application
+Brook is software router for erlang.
 
-Build
------
+## Goals
 
-    $ rebar3 compile
-# brook
+Brook provide arp protocol, ip protocol and icmp protocol.
+You can implement basic routing and also configure static routing.

@@ -19,10 +19,12 @@
 % response
 -define(OPTION_RESPONSE, 16#0002).
 
--export([init/0, get_mac_addr/1, packet/1]).
+-export([init/0]).
+-export([table/0, table/1]).
+-export([packet/1]).
+-export([get_mac_addr/1]).
 -export([save_from_arp/2]).
 -export([request_arp/2]).
--export([table/0, table/1]).
 
 %%====================================================================
 %% API
@@ -37,10 +39,12 @@ table(show) ->
   mnesia:dirty_match_object(arp_table, {'_', '$1', '$2', '$3', '$4'}).
 
 get_mac_addr({_, Nexthop}) ->
-  case mnesia:dirty_match_object(arp_table, {'_', '$1', Nexthop, '$2', '_'}) of
+  case fetch_dest_ip_addr(Nexthop, false) of
     [] ->
       undefined;
     [{arp_table, _, _, DestMac, _}| _] ->
+      DestMac;
+    [DestMac| _] ->
       DestMac
   end.
 
@@ -91,9 +95,7 @@ save_from_arp(
   <<_:48, SM1, SM2, SM3, SM4, SM5, SM6, _/bitstring>>,
   <<_:96, SourceAddr:32, _/bitstring>>
 ) ->
-  case mnesia:dirty_match_object(arp_table,
-    {'_', '$1', '$2', {SM1, SM2, SM3, SM4, SM5, SM6}, '_'}
-  ) of
+  case fetch_dest_mac_addr({SM1, SM2, SM3, SM4, SM5, SM6}, false) of
     [] ->
       case brook_interface:match_network(SourceAddr) of
         not_match ->
@@ -154,4 +156,59 @@ to_binary(Record) ->
     DestMacAddr/bitstring,
     DestIPAddr/bitstring
   >>.
+
+%%--------------------------------------------------------------------
+%
+% fetch dest ip addr
+%
+fetch_dest_ip_addr(Nexthop) ->
+  fetch_dest_ip_addr(Nexthop, true).
+
+fetch_dest_ip_addr(Nexthop, true) ->
+  Func = fun() ->
+    MatchHead = #arp_table{dest_ip_addr=Nexthop, dest_mac_addr='$1', _='_'},
+    Result = '$1',
+    fetch_arp_table(MatchHead, Result)
+  end,
+  case mnesia:transaction(Func) of
+    {atomic, Res} ->
+      Res;
+    {aborted, _} ->
+      []
+  end;
+
+fetch_dest_ip_addr(Nexthop, false) ->
+  mnesia:dirty_match_object(arp_table, {'_', '$1', Nexthop, '$2', '$3'}).
+
+
+%%--------------------------------------------------------------------
+%
+% fetch dest mac addr
+%
+fetch_dest_mac_addr(DestMac) ->
+  fetch_dest_mac_addr(DestMac, true).
+
+fetch_dest_mac_addr(DestMac, true) ->
+  Func = fun() ->
+    MatchHead = #arp_table{dest_mac_addr=DestMac, dest_ip_addr='$1', _='_'},
+    Result = '$1',
+    fetch_arp_table(MatchHead, Result)
+  end,
+  case mnesia:transaction(Func) of
+    {atomic, Res} ->
+      Res;
+    {aborted, _} ->
+      []
+  end;
+
+fetch_dest_mac_addr(DestMac, false) ->
+  mnesia:dirty_match_object(arp_table, {'_', '$1', '$2', DestMac, '$3'}).
+
+
+%%--------------------------------------------------------------------
+%
+% fetch arp table
+%
+fetch_arp_table(MatchHead, Result) ->
+    mnesia:select(arp_table, [{MatchHead, [], [Result]}]).
 
