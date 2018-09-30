@@ -2,7 +2,7 @@
 %% @doc brook IP
 %% @end
 %%%-------------------------------------------------------------------
--module(ip).
+-module(brook_ip).
 
 -include("interface.hrl").
 % source route type
@@ -45,7 +45,7 @@ init() ->
     {attributes, record_info(fields, routing_table)},
     {type, bag}
   ]),
-  IfList = interface:list(),
+  IfList = brook_interface:list(),
   set_direct_routing_table(IfList, []).
 
 %%--------------------------------------------------------------------
@@ -64,7 +64,7 @@ send_packet(<<Head:80, _:16, SourceIp:32, DestIp:32, Other/bitstring>>, Opt) ->
     not_found_dest_ip ->
       false;
     {IfName, NextIp} ->
-      ethernet:send_packet(
+      brook_ethernet:send_packet(
         <<Head:80, SendCheckSum:16, SourceIp:32, DestIp:32, Other/bitstring>>,
         Opt#{if_name=>IfName, next_ip=>NextIp}
       )
@@ -107,7 +107,7 @@ receiver_ip(true, _, _) ->
 % other ip
 % icmp protocol
 receiver_ip(false, <<Head:64, TTL, 1, Other/bitstring>>, Opt) ->
-  icmp:receive_packet(<<Head:64, (TTL-1), 1, Other/bitstring>>, Opt);
+  brook_icmp:receive_packet(<<Head:64, (TTL-1), 1, Other/bitstring>>, Opt);
 
 % other protocol
 receiver_ip(false, <<Head:64, TTL, Other/bitstring>>, Opt) ->
@@ -118,7 +118,7 @@ receiver_ip(false, <<Head:64, TTL, Other/bitstring>>, Opt) ->
 % is self ip
 %
 is_self_ip(Dest) ->
-  case interface:match({'_', '$1', trance_to_tuple_ip_addr(Dest), '_', '_', '_'}) of
+  case brook_interface:match({'_', '$1', trance_to_tuple_ip_addr(Dest), '_', '_', '_'}) of
     [] ->
       false;
     _ ->

@@ -2,7 +2,7 @@
 %% @doc brook arp
 %% @end
 %%%-------------------------------------------------------------------
--module(arp).
+-module(brook_arp).
 
 % hardware type
 -define(ETHERNET, 16#0001).
@@ -68,7 +68,7 @@ packet(_) ->
 % arp request
 %
 request_arp(If, Nexthop) ->
-  case interface:match({'_', If, '$1', '_', '$2', '_'}) of
+  case brook_interface:match({'_', If, '$1', '_', '$2', '_'}) of
     [] ->
       false;
     [{_, _, SourceIp, _, SourceMacAddr, _}] ->
@@ -79,7 +79,7 @@ request_arp(If, Nexthop) ->
         dest_mac_addr=[16#00, 16#00, 16#00, 16#00, 16#00, 16#00],
         dest_ip_addr=tuple_to_list(Nexthop)
       }),
-      packet_sender:send_packet(arp_request, {ARPHeader, If})
+      brook_sender:send_packet(arp_request, {ARPHeader, If})
   end.
 
 %%--------------------------------------------------------------------
@@ -95,7 +95,7 @@ save_from_arp(
     {'_', '$1', '$2', {SM1, SM2, SM3, SM4, SM5, SM6}, '_'}
   ) of
     [] ->
-      case interface:match_network(SourceAddr) of
+      case brook_interface:match_network(SourceAddr) of
         not_match ->
           not_save;
         #{addr:=Addr} ->

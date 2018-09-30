@@ -3,7 +3,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
--module(arp_pooling).
+-module(brook_arp_pooling).
 -behavior(gen_server).
 
 -export([start_link/1]).
@@ -55,7 +55,7 @@ check_pool_packet([
   #arp_pool{packet=Packet, interface=IfName,
         nexthop=Nexthop, count=Count}| Tail
 ], Res) ->
-  case arp:get_mac_addr({IfName, Nexthop}) of
+  case brook_arp:get_mac_addr({IfName, Nexthop}) of
     undefined when Count >= 30 ->
       check_pool_packet(Tail, Res);
     undefined ->
@@ -65,10 +65,10 @@ check_pool_packet([
         nexthop=Nexthop, count=Count+1}| Res]
       );
     DestMac when is_tuple(DestMac) ->
-      packet_sender:send_packet(ip_request, {IfName, tuple_to_list(DestMac), Packet}),
+      brook_sender:send_packet(ip_request, {IfName, tuple_to_list(DestMac), Packet}),
       check_pool_packet(Tail, Res);
     DestMac when is_list(DestMac) ->
-      packet_sender:send_packet(ip_request, {IfName, DestMac, Packet}),
+      brook_sender:send_packet(ip_request, {IfName, DestMac, Packet}),
       check_pool_packet(Tail, Res)
   end.
 
