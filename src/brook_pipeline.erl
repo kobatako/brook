@@ -3,7 +3,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
--module(pipeline).
+-module(brook_pipeline).
 -export([init/0]).
 -export([before_ip_filter/2]).
 -export([after_ip_filter/2]).

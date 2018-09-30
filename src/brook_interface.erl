@@ -2,7 +2,7 @@
 %% @doc brook interface
 %% @end
 %%%-------------------------------------------------------------------
--module(interface).
+-module(brook_interface).
 
 -include("interface.hrl").
 
@@ -94,7 +94,7 @@ interface_opt([], Opt) ->
 interface_opt([Head| Tail], Opt) ->
   Res = case Head of
     {hwaddr, Hwaddr} ->
-      Opt#interface{hw_addr=ethernet:trance_to_tuple_mac_addr(Hwaddr)};
+      Opt#interface{hw_addr=brook_ethernet:trance_to_tuple_mac_addr(Hwaddr)};
     % IP v4
     {addr, {_, _, _, _}=Addr} ->
       Opt#interface{addr=Addr};

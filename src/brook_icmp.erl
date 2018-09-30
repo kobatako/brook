@@ -1,4 +1,4 @@
--module(icmp).
+-module(brook_icmp).
 
 -define(TYPE_TIME_EXCEEDED, 11).
 
@@ -8,12 +8,10 @@
 receive_packet(<<Head:64, TTL, 1, Checksum:16, SourceIp:32, _Other/bitstring>>, Opt) when TTL =< 0 ->
   TypeCode = <<?TYPE_TIME_EXCEEDED, 0>>,
   Checksum = checksum(TypeCode, 16#0000),
-  io:format("icmp time exceeded~n"),
-  io:format("~p~n", [Opt]),
   false;
 
 receive_packet(<<Data/bitstring>>, Opt) ->
-  ip:send_packet(Data, Opt).
+  brook_ip:send_packet(Data, Opt).
 
 
 %%====================================================================

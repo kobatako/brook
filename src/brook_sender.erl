@@ -3,7 +3,7 @@
 %% @end
 %%%-------------------------------------------------------------------
 
--module(packet_sender).
+-module(brook_sender).
 -behaviour(gen_server).
 
 % hardware type
@@ -73,9 +73,9 @@ handle_call(?MODULE, _, _) ->
 % send packet
 %
 send_packet(ip_request, SendData) ->
-  gen_server:cast(packet_sender, {ip_request, SendData});
+  gen_server:cast(brook_sender, {ip_request, SendData});
 send_packet(arp_request, SendData) ->
-  gen_server:cast(packet_sender, {arp_request, SendData}).
+  gen_server:cast(brook_sender, {arp_request, SendData}).
 
 %%--------------------------------------------------------------------
 %
@@ -137,10 +137,10 @@ ip_request(FD, #{source_mac := SourceMac, dest_mac := DestMac}=Opt, Data) ->
 request(FD, Buf, Opt) ->
   case procket:write(FD, Buf) of
     ok ->
-      pipeline:after_send_packet(Buf, Opt),
+      brook_pipeline:after_send_packet(Buf, Opt),
       true;
     {ok, _} ->
-      pipeline:after_send_packet(Buf, Opt),
+      brook_pipeline:after_send_packet(Buf, Opt),
       true;
     {error, _} ->
       false

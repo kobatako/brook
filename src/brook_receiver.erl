@@ -1,4 +1,4 @@
--module(packet_receiver).
+-module(brook_receiver).
 -behaviour(gen_event).
 
 -include("interface.hrl").
@@ -49,7 +49,7 @@ loop(FD) ->
 %%--------------------------------------------------------------------
 % handle event
 handle_event(Buf, Fd) ->
-  ethernet:receive_packet(Buf),
+  brook_ethernet:receive_packet(Buf),
   {ok, Fd}.
 
 %%--------------------------------------------------------------------

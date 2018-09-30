@@ -29,16 +29,16 @@ start_link(FD) ->
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
 init([FD]) ->
     ChildSpecs = [
-      #{id => packet_sender,
-        start => {packet_sender, start_link, [[FD]]},
+      #{id => brook_sender,
+        start => {brook_sender, start_link, [[FD]]},
         restart => permanent,
         shutdown => brutal_kill,
         type => worker,
-        modules => [packet_sender]
+        modules => [brook_sender]
       }
     ],
-    packet_receiver:start_link(FD),
-    arp_pooling:start_link(10),
+    brook_receiver:start_link(FD),
+    brook_arp_pooling:start_link(10),
     {ok, { {one_for_one, 60, 3600}, ChildSpecs} }.
 
 %%====================================================================
