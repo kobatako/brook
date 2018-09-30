@@ -9,14 +9,9 @@
 -export([after_ip_filter/2]).
 -export([after_send_packet/2]).
 
--export([save_before_ip_filter/1]).
--export([save_before_ip_filter/2]).
-
--export([save_after_ip_filter/1]).
--export([save_after_ip_filter/2]).
-
--export([save_after_send_packet/1]).
--export([save_after_send_packet/2]).
+-export([save_before_ip_filter/1, save_before_ip_filter/2]).
+-export([save_after_ip_filter/1, save_after_ip_filter/2]).
+-export([save_after_send_packet/1, save_after_send_packet/2]).
 
 -define(BEFORE_IP, before_ip_filter).
 -define(AFTER_IP, after_ip_filter).
