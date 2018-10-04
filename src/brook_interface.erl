@@ -10,6 +10,7 @@
 -export([list/0]).
 -export([match/1]).
 -export([match_network/1]).
+-export([match_ip_addr/1]).
 
 %%====================================================================
 %% API
@@ -30,6 +31,11 @@ match(Match) ->
 
 match_network(Addr) ->
   fetch_interface_network(list(), Addr).
+
+match_ip_addr(Addr) ->
+  mnesia:dirty_match_object(interface, {
+    '_', '$1', Addr, '_', '_', '_'
+  }).
 
 %%====================================================================
 %% Internal functions

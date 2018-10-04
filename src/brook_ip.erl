@@ -38,7 +38,9 @@
 %%====================================================================
 
 %%--------------------------------------------------------------------
+%
 % init
+%
 init() ->
   {atomic, ok} = mnesia:create_table(routing_table, [
     {attributes, record_info(fields, routing_table)},
@@ -48,22 +50,32 @@ init() ->
   set_direct_routing_table(IfList, []).
 
 %%--------------------------------------------------------------------
+%
 % receive packet
+%
 receive_packet(<<_:128, DestIp:32, _/bitstring>> = Data, Opt) ->
-  receiver_ip(is_self_ip(<<DestIp:32>>), Data, Opt).
+  Dest = trance_to_tuple_ip_addr(<<DestIp:32>>),
+  case brook_interface:match_ip_addr(Dest) of
+    [] ->
+      receive_next_layer(Data, Opt);
+    _ ->
+      false
+  end.
 
 %%--------------------------------------------------------------------
+%
 % send packet
+%
 send_packet(<<_:64, 0, _:16, _SourceIp:32, _DestIp:32, _Other/bitstring>>, _) ->
   not_send_packet;
-send_packet(<<Head:80, _:16, SourceIp:32, DestIp:32, Other/bitstring>>, Opt) ->
+send_packet(<<Head:80, _:16, SourceIp:32, DestIp:32, Other/bitstring>>=Data, Opt) ->
   SendData = <<Head:80, SourceIp:32, DestIp:32>>,
   SendCheckSum = checksum(SendData, 16#0000),
   case get_dest_ip(DestIp) of
     not_found_dest_ip ->
       false;
     {IfName, NextIp} ->
-      brook_ethernet:send_packet(
+      packet_after_filter(
         <<Head:80, SendCheckSum:16, SourceIp:32, DestIp:32, Other/bitstring>>,
         Opt#{if_name=>IfName, next_ip=>NextIp}
       )
@@ -100,29 +112,25 @@ route(add, static, #{dest_route := {D1, D2, D3, D4}, subnetmask := {S1, S2, S3, 
 %%====================================================================
 
 %%--------------------------------------------------------------------
-% self ip
-receiver_ip(true, _, _) ->
-  false;
+%
+% packet after filter
+%
+packet_after_filter(Data, Opt) ->
+  case brook_pipeline:after_ip_filter(Data, Opt) of
+    {error, Msg} ->
+      {error, Msg};
+    {ok, Data, ResOpt} ->
+      brook_ethernet:send_packet(Data, ResOpt)
+  end.
+
 % other ip
 % icmp protocol
-receiver_ip(false, <<Head:64, TTL, 1, Other/bitstring>>, Opt) ->
+receive_next_layer(<<Head:64, TTL, 1, Other/bitstring>>, Opt) ->
   brook_icmp:receive_packet(<<Head:64, (TTL-1), 1, Other/bitstring>>, Opt);
 
 % other protocol
-receiver_ip(false, <<Head:64, TTL, Other/bitstring>>, Opt) ->
+receive_next_layer(<<Head:64, TTL, Other/bitstring>>, Opt) ->
   send_packet(<<Head:64, (TTL-1), Other/bitstring>>, Opt).
-
-%%--------------------------------------------------------------------
-%
-% is self ip
-%
-is_self_ip(Dest) ->
-  case brook_interface:match({'_', '$1', trance_to_tuple_ip_addr(Dest), '_', '_', '_'}) of
-    [] ->
-      false;
-    _ ->
-      true
-  end.
 
 %%--------------------------------------------------------------------
 %
