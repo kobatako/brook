@@ -31,7 +31,9 @@ loop_up([#{ip_fd := FD}| Tail]) ->
   loop_up(Tail).
 
 %%--------------------------------------------------------------------
+%
 % main loop
+%
 loop(FD) ->
   case procket:recv(FD, 8192) of
     {error, eagain} ->

@@ -42,13 +42,15 @@ send_packet(Data, #{if_name:=IfName, next_ip:=NextIp}=Opt) ->
       gen_server:cast(brook_arp_pooling, {save_pooling, {Data, IfName, NextIp}}),
       false;
     DestMac when is_tuple(DestMac) ->
-      packet_after_filter(Data, Opt#{dest_mac=>tuple_to_list(DestMac)});
+      brook_sender:send_packet(ip_request, {Data, Opt#{dest_mac=>tuple_to_list(DestMac)}});
     DestMac when is_list(DestMac) ->
-      packet_after_filter(Data, Opt#{dest_mac=>DestMac})
+      brook_sender:send_packet(ip_request, {Data, Opt#{dest_mac=>DestMac}})
   end.
 
 %%--------------------------------------------------------------------
+%
 % trance mac addr
+%
 trance_to_tuple_mac_addr([D1, D2, D3, D4, D5, D6]) ->
   {D1, D2, D3, D4, D5, D6};
 trance_to_tuple_mac_addr(<<D1, D2, D3, D4, D5, D6>>) ->
@@ -60,18 +62,6 @@ trance_to_tuple_mac_addr(MacAddr) when is_integer(MacAddr) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
-
-%%--------------------------------------------------------------------
-%
-% packet after filter
-%
-packet_after_filter(Data, Opt) ->
-  case brook_pipeline:after_ip_filter(Data, Opt) of
-    {error, Msg} ->
-      {error, Msg};
-    {ok, Data, ResOpt} ->
-      brook_sender:send_packet(ip_request, {Data, ResOpt})
-  end.
 
 %%--------------------------------------------------------------------
 %
@@ -88,7 +78,7 @@ ethernet_type(?TYPE_IP, <<DestMacAddr:48, SourceMacAddr:48, Type:16, Data/bitstr
     {error, Msg} ->
       {error, Msg};
     {ok, Data, Opt} ->
-      apply(brook_ip, receive_packet, [Data, Opt])
+      brook_ip:receive_packet(Data, Opt)
   end;
 
 %%--------------------------------------------------------------------
@@ -99,7 +89,9 @@ ethernet_type(?TYPE_ARP, <<_:112, Data/bitstring>>) ->
   brook_arp:packet(Data);
 
 %%--------------------------------------------------------------------
+%
 % not match Protocol
+%
 ethernet_type(_Type, _Data) ->
   undefined.
 
