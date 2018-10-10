@@ -14,6 +14,8 @@
 -define(NEXTHOP_DIRECT, directory_connected).
 
 -define(DEFAULT_ROUTE, 255).
+% len IP address
+-define(?IP_LEN, 32).
 
 -export([init/0]).
 -export([route/1, route/3]).
@@ -53,30 +55,43 @@ init() ->
 %
 % receive packet
 %
-receive_packet(<<_:128, DestIp:32, _/bitstring>> = Data, Opt) ->
-  Dest = trance_to_tuple_ip_addr(<<DestIp:32>>),
-  case brook_interface:match_ip_addr(Dest) of
-    [] ->
-      receive_next_layer(Data, Opt);
+receive_packet(<<_:4, Len:4, _:72, CheckSum:16, _:?IP_LEN, DestIp:?IP_LEN, _/bitstring>> = Data, Opt) ->
+  case check_sum_header(Len, Data) of
+    CheckSum ->
+      Dest = trance_to_tuple_ip_addr(<<DestIp:?IP_LEN>>),
+      case brook_interface:match_ip_addr(Dest) of
+        [] ->
+          receive_next_layer(Data, Opt);
+        _ ->
+          false
+      end;
     _ ->
       false
   end.
+
+check_sum_header(HeadLen, <<Head:80, _:16, Other/bitstring>>) ->
+  Len = HeadLen * 4 * 8 - 96,
+  <<Food:Len, _/bitstring>> = Other,
+  CheckData = <<Head:80, Food:Len>>,
+  checksum(CheckData, 16#0000).
 
 %%--------------------------------------------------------------------
 %
 % send packet
 %
-send_packet(<<_:64, 0, _:16, _SourceIp:32, _DestIp:32, _Other/bitstring>>, _) ->
+send_packet(<<_:72, 0, _Other/bitstring>>, _) ->
   not_send_packet;
-send_packet(<<Head:80, _:16, SourceIp:32, DestIp:32, Other/bitstring>>=Data, Opt) ->
-  SendData = <<Head:80, SourceIp:32, DestIp:32>>,
+send_packet(<<Ver:4, HeadLen:4, Head:72, _:16, SourceIp:?IP_LEN, DestIp:?IP_LEN, Other/bitstring>>=Data, Opt) ->
+  Len = HeadLen * 4 * 8 - 96 - 64,
+  <<Food:Len, _/bitstring>> = Other,
+  SendData = <<Ver:4, HeadLen:4, Head:72, SourceIp:?IP_LEN, DestIp:?IP_LEN, Food:Len>>,
   SendCheckSum = checksum(SendData, 16#0000),
   case get_dest_ip(DestIp) of
     not_found_dest_ip ->
       false;
     {IfName, NextIp} ->
       packet_after_filter(
-        <<Head:80, SendCheckSum:16, SourceIp:32, DestIp:32, Other/bitstring>>,
+        <<Ver:4, HeadLen:4, Head:72, SendCheckSum:16, SourceIp:?IP_LEN, DestIp:?IP_LEN, Other/bitstring>>,
         Opt#{if_name=>IfName, next_ip=>NextIp}
       )
   end.
@@ -90,8 +105,8 @@ route(show) ->
 % show route
 route(add, static, #{dest_route := {D1, D2, D3, D4}, subnetmask := {S1, S2, S3, S4},
       nexthop := Nexthop, out_interface := OutInterface}) ->
-  <<DestRoute:32>> = <<D1, D2, D3, D4>>,
-  <<Subnetmask:32>> = <<S1, S2, S3, S4>>,
+  <<DestRoute:?IP_LEN>> = <<D1, D2, D3, D4>>,
+  <<Subnetmask:?IP_LEN>> = <<S1, S2, S3, S4>>,
   RoutingTable = #routing_table{
     source_route=?SOURCE_STATIC,
     dest_route={D1, D2, D3, D4},
@@ -153,7 +168,9 @@ checksum(<<>>, Sum) ->
 checksum(<<A:16, Other/bitstring>>, Sum) ->
   Check = A + Sum,
   Res = (Check band 16#FFFF) + (Check bsr 16),
-  checksum(Other, Res).
+  checksum(Other, Res);
+checksum(<<_>>, _) ->
+  bad_match_data_len.
 
 %%--------------------------------------------------------------------
 get_dest_route(DestIp) ->
@@ -264,7 +281,7 @@ all_routing_table() ->
 % trance to integer ip addr
 %
 trance_to_integer_ip_addr({I1, I2, I3, I4}) ->
-  <<Ip:32>> =  <<I1, I2, I3, I4>>,
+  <<Ip:?IP_LEN>> =  <<I1, I2, I3, I4>>,
   Ip;
 trance_to_integer_ip_addr(_) ->
   undefined.
@@ -276,7 +293,7 @@ trance_to_integer_ip_addr(_) ->
 trance_to_tuple_ip_addr(<<I1, I2, I3, I4>>) ->
   {I1, I2, I3, I4};
 trance_to_tuple_ip_addr(Ip) when is_integer(Ip) ->
-  <<I1, I2, I3, I4>> = <<Ip:32>>,
+  <<I1, I2, I3, I4>> = <<Ip:?IP_LEN>>,
   {I1, I2, I3, I4};
 trance_to_tuple_ip_addr(_) ->
   undefined.
