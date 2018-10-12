@@ -74,7 +74,7 @@ ethernet_type(?TYPE_IP, <<DestMacAddr:48, SourceMacAddr:48, Type:16, Data/bitstr
           source_mac_addr => trance_to_tuple_mac_addr(SourceMacAddr),
           type => Type
   }},
-  case brook_pipeline:before_ip_filter(Data, Opt) of
+  case brook_pipeline:before_ip_pipeline(Data, Opt) of
     {error, Msg} ->
       {error, Msg};
     {ok, Data, Opt} ->

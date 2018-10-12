@@ -15,7 +15,11 @@
 
 -define(DEFAULT_ROUTE, 255).
 % len IP address
--define(?IP_LEN, 32).
+-define(IP_LEN, 32).
+
+-define(ICMP_PROTOCOL, 1).
+-define(TCP_PROTOCOL, 6).
+-define(UDP_PROTOCOL, 17).
 
 -export([init/0]).
 -export([route/1, route/3]).
@@ -81,7 +85,7 @@ check_sum_header(HeadLen, <<Head:80, _:16, Other/bitstring>>) ->
 %
 send_packet(<<_:72, 0, _Other/bitstring>>, _) ->
   not_send_packet;
-send_packet(<<Ver:4, HeadLen:4, Head:72, _:16, SourceIp:?IP_LEN, DestIp:?IP_LEN, Other/bitstring>>=Data, Opt) ->
+send_packet(<<Ver:4, HeadLen:4, Head:72, _:16, SourceIp:32, DestIp:32, Other/bitstring>>=Data, Opt) ->
   Len = HeadLen * 4 * 8 - 96 - 64,
   <<Food:Len, _/bitstring>> = Other,
   SendData = <<Ver:4, HeadLen:4, Head:72, SourceIp:?IP_LEN, DestIp:?IP_LEN, Food:Len>>,
@@ -131,7 +135,7 @@ route(add, static, #{dest_route := {D1, D2, D3, D4}, subnetmask := {S1, S2, S3, 
 % packet after filter
 %
 packet_after_filter(Data, Opt) ->
-  case brook_pipeline:after_ip_filter(Data, Opt) of
+  case brook_pipeline:after_ip_pipeline(Data, Opt) of
     {error, Msg} ->
       {error, Msg};
     {ok, Data, ResOpt} ->
@@ -140,8 +144,24 @@ packet_after_filter(Data, Opt) ->
 
 % other ip
 % icmp protocol
-receive_next_layer(<<Head:64, TTL, 1, Other/bitstring>>, Opt) ->
+receive_next_layer(<<Head:64, TTL, ?ICMP_PROTOCOL, Other/bitstring>>, Opt) ->
   brook_icmp:receive_packet(<<Head:64, (TTL-1), 1, Other/bitstring>>, Opt);
+
+receive_next_layer(<<Head:64, TTL, ?TCP_PROTOCOL, Other/bitstring>>=Data, Opt) ->
+  case brook_pipeline:before_tcp_pipeline(<<Head:64, (TTL-1), ?TCP_PROTOCOL, Other/bitstring>>, Opt) of
+    {error, Msg} ->
+      {error, Msg};
+    {ok, ResData, ResOpt} ->
+      brook_tcp:receive_packet(ResData, ResOpt)
+  end;
+
+receive_next_layer(<<Head:64, TTL, ?UDP_PROTOCOL, Other/bitstring>>=Data, Opt) ->
+  case brook_pipeline:before_udp_pipeline(<<Head:64, (TTL-1), ?UDP_PROTOCOL, Other/bitstring>>, Opt) of
+    {error, Msg} ->
+      {error, Msg};
+    {ok, ResData, ResOpt} ->
+      brook_udp:receive_packet(ResData, ResOpt)
+  end;
 
 % other protocol
 receive_next_layer(<<Head:64, TTL, Other/bitstring>>, Opt) ->
