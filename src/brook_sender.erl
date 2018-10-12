@@ -137,10 +137,10 @@ ip_request(FD, #{source_mac := SourceMac, dest_mac := DestMac}=Opt, Data) ->
 request(FD, Buf, Opt) ->
   case procket:write(FD, Buf) of
     ok ->
-      brook_pipeline:after_send_packet(Buf, Opt),
+      brook_pipeline:after_send_pipeline(Buf, Opt),
       true;
     {ok, _} ->
-      brook_pipeline:after_send_packet(Buf, Opt),
+      brook_pipeline:after_send_pipeline(Buf, Opt),
       true;
     {error, _} ->
       false
