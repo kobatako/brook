@@ -35,11 +35,23 @@ init([FD]) ->
         shutdown => brutal_kill,
         type => worker,
         modules => [brook_sender]
+      },
+      #{id => brook_receiver,
+        start => {brook_receiver, start_link, [FD]},
+        restart => permanent,
+        shutdown => brutal_kill,
+        type => worker,
+        modules => [brook_receiver]
+      },
+      #{id => brook_arp_pooling,
+        start => {brook_arp_pooling, start_link, [[10]]},
+        restart => permanent,
+        shutdown => brutal_kill,
+        type => worker,
+        modules => [brook_arp_pooling]
       }
     ],
-    brook_receiver:start_link(FD),
-    brook_arp_pooling:start_link(10),
-    {ok, { {one_for_one, 60, 3600}, ChildSpecs} }.
+    {ok, { {one_for_one, 5, 60}, ChildSpecs} }.
 
 %%====================================================================
 %% Internal functions

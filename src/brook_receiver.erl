@@ -14,12 +14,13 @@
 %%====================================================================
 
 start_link(FD) ->
-  gen_event:start_link({local, receiver}), gen_event:start({local, receiver}),
-  gen_event:add_handler(receiver, ?MODULE, [FD]).
+  Res = gen_event:start_link({local, receiver}), gen_event:start({local, receiver}),
+  gen_event:add_handler(receiver, ?MODULE, [FD]),
+  Res.
 
 %%--------------------------------------------------------------------
 
-init([FD]) ->
+init([FD| _]) ->
   loop_up(FD),
   {ok, FD}.
 
@@ -27,7 +28,7 @@ init([FD]) ->
 loop_up([]) ->
   true;
 loop_up([#{ip_fd := FD}| Tail]) ->
-  spawn(fun() -> loop(FD) end),
+  spawn_link(fun() -> loop(FD) end),
   loop_up(Tail).
 
 %%--------------------------------------------------------------------
