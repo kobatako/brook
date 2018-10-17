@@ -8,7 +8,7 @@
 -behaviour(supervisor).
 
 %% API
--export([start_link/1]).
+-export([start_link/0]).
 
 %% Supervisor callbacks
 -export([init/1]).
@@ -19,36 +19,22 @@
 %% API functions
 %%====================================================================
 
-start_link(FD) ->
-   supervisor:start_link({local, ?SERVER}, ?MODULE, [FD]).
+start_link() ->
+   supervisor:start_link({local, ?SERVER}, ?MODULE, []).
 
 %%====================================================================
 %% Supervisor callbacks
 %%====================================================================
 
 %% Child :: {Id,StartFunc,Restart,Shutdown,Type,Modules}
-init([FD]) ->
+init([]) ->
     ChildSpecs = [
-      #{id => brook_sender,
-        start => {brook_sender, start_link, [[FD]]},
+      #{id => brook_capture_sup,
+        start => {brook_capture_sup, start_link, [[]]},
         restart => permanent,
         shutdown => brutal_kill,
         type => worker,
-        modules => [brook_sender]
-      },
-      #{id => brook_receiver,
-        start => {brook_receiver, start_link, [FD]},
-        restart => permanent,
-        shutdown => brutal_kill,
-        type => worker,
-        modules => [brook_receiver]
-      },
-      #{id => brook_arp_pooling,
-        start => {brook_arp_pooling, start_link, [[10]]},
-        restart => permanent,
-        shutdown => brutal_kill,
-        type => worker,
-        modules => [brook_arp_pooling]
+        modules => [brook_capture_sup]
       }
     ],
     {ok, { {one_for_one, 5, 60}, ChildSpecs} }.
