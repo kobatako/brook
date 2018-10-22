@@ -2,6 +2,10 @@
 
 -include("arp.hrl").
 
+-export([start_link/0]).
+-export([table/0]).
+-export([table/1]).
+-export([save_arp_table/1]).
 -export([fetch_dest_ip_addr/1]).
 -export([fetch_dest_ip_addr/2]).
 -export([fetch_dest_mac_addr/2]).
@@ -81,4 +85,13 @@ fetch_dest_ip_addr(Nexthop, false) ->
 fetch_arp_table(MatchHead, Result) ->
     mnesia:select(arp_table, [{MatchHead, [], [Result]}]).
 
+
+%%--------------------------------------------------------------------
+%
+% save arp table
+%
+save_arp_table(ArpTable) ->
+  mnesia:transaction(fun() ->
+    mnesia:write(arp_table, ArpTable, write)
+  end).
 

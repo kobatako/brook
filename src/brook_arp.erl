@@ -26,18 +26,25 @@
 -export([save_from_arp/2]).
 -export([request_arp/2]).
 
+-type mac_address() :: {integer(), integer(), integer(), integer(), integer(), integer()}.
+
 %%====================================================================
 %% API
 %%====================================================================
 
+-spec init() -> {atomic, ok}.
 init() ->
-  {atomic, ok} = mnesia:create_table(arp_table, [{attributes, record_info(fields, arp_table)}]).
+  brook_arp_table:start_link().
 
+-spec table() -> true.
 table() ->
   true.
-table(show) ->
-  mnesia:dirty_match_object(arp_table, {'_', '$1', '$2', '$3', '$4'}).
 
+-spec table(show) -> list().
+table(Cont) ->
+  brook_arp_table:table(Cont).
+
+-spec get_mac_addr(tuple()) -> mac_address() | undefined.
 get_mac_addr({_, Nexthop}) ->
   case brook_arp_table:fetch_dest_ip_addr(Nexthop, false) of
     [] ->
@@ -63,7 +70,7 @@ packet(<<?ETHERNET:16, _:16, _, _, ?OPTION_RESPONSE:16,
       dest_mac_addr={SM1, SM2, SM3, SM4, SM5, SM6},
       type=?ETHERNET
   },
-  save_arp_table(ArpTable);
+  brook_arp_table:save_arp_table(ArpTable);
 packet(_) ->
   true.
 
@@ -107,7 +114,7 @@ save_from_arp(
               dest_mac_addr={SM1, SM2, SM3, SM4, SM5, SM6},
               type=?ETHERNET
           },
-          save_arp_table(ArpTable)
+          brook_arp_table:save_arp_table(ArpTable)
       end;
     _ ->
       true
@@ -118,15 +125,6 @@ save_from_arp(_, _) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
-
-%%--------------------------------------------------------------------
-%
-% save arp table
-%
-save_arp_table(ArpTable) ->
-  mnesia:transaction(fun() ->
-    mnesia:write(arp_table, ArpTable, write)
-  end).
 
 %%--------------------------------------------------------------------
 %
