@@ -5,39 +5,14 @@
 -module(brook_ip).
 
 -include("interface.hrl").
-% source route type
-% direct connect route
--define(SOURCE_DIRECT, c).
-% static route
--define(SOURCE_STATIC, s).
-
--define(NEXTHOP_DIRECT, directory_connected).
-
--define(DEFAULT_ROUTE, 255).
-% len IP address
--define(IP_LEN, 32).
-
--define(ICMP_PROTOCOL, 1).
--define(TCP_PROTOCOL, 6).
--define(UDP_PROTOCOL, 17).
+-include("ip.hrl").
 
 -export([init/0]).
 -export([route/1, route/3]).
 -export([receive_packet/2]).
 -export([send_packet/2]).
-
--record(routing_table, {
-  source_route,       % routing learn source
-  dest_route,         % destination route
-  dest_route_int,     % destination route integer
-  subnetmask,         % subnet mask ( number )
-  subnetmask_int,     % subnet mask ( number )
-  ad,                 % administrative distancec
-  metric,             % metric
-  nexthop,            % next hop ip
-  age,                % destination route learng time
-  out_interface       % out put interface
-}).
+-export([trance_to_integer_ip_addr/1]).
+-export([trance_to_tuple_ip_addr/1]).
 
 %%====================================================================
 %% API
@@ -48,18 +23,16 @@
 % init
 %
 init() ->
-  {atomic, ok} = mnesia:create_table(routing_table, [
-    {attributes, record_info(fields, routing_table)},
-    {type, bag}
-  ]),
-  IfList = brook_interface:list(),
-  set_direct_routing_table(IfList, []).
+  brook_routing_table:start_link().
 
 %%--------------------------------------------------------------------
 %
 % receive packet
 %
-receive_packet(<<_:4, Len:4, _:72, CheckSum:16, _:?IP_LEN, DestIp:?IP_LEN, _/bitstring>> = Data, Opt) ->
+receive_packet(
+    <<_:4, Len:4, _:72, CheckSum:16, _:?IP_LEN, DestIp:?IP_LEN, _/bitstring>> = Data,
+    Opt
+) ->
   case check_sum_header(Len, Data) of
     CheckSum ->
       Dest = trance_to_tuple_ip_addr(<<DestIp:?IP_LEN>>),
@@ -85,7 +58,7 @@ check_sum_header(HeadLen, <<Head:80, _:16, Other/bitstring>>) ->
 %
 send_packet(<<_:72, 0, _Other/bitstring>>, _) ->
   not_send_packet;
-send_packet(<<Ver:4, HeadLen:4, Head:72, _:16, SourceIp:32, DestIp:32, Other/bitstring>>=Data, Opt) ->
+send_packet(<<Ver:4, HeadLen:4, Head:72, _:16, SourceIp:32, DestIp:32, Other/bitstring>>, Opt) ->
   Len = HeadLen * 4 * 8 - 96 - 64,
   <<Food:Len, _/bitstring>> = Other,
   SendData = <<Ver:4, HeadLen:4, Head:72, SourceIp:?IP_LEN, DestIp:?IP_LEN, Food:Len>>,
@@ -95,7 +68,10 @@ send_packet(<<Ver:4, HeadLen:4, Head:72, _:16, SourceIp:32, DestIp:32, Other/bit
       false;
     {IfName, NextIp} ->
       packet_after_filter(
-        <<Ver:4, HeadLen:4, Head:72, SendCheckSum:16, SourceIp:?IP_LEN, DestIp:?IP_LEN, Other/bitstring>>,
+        <<
+          Ver:4, HeadLen:4, Head:72, SendCheckSum:16, SourceIp:?IP_LEN,
+          DestIp:?IP_LEN, Other/bitstring
+        >>,
         Opt#{if_name=>IfName, next_ip=>NextIp}
       )
   end.
@@ -103,7 +79,7 @@ send_packet(<<Ver:4, HeadLen:4, Head:72, _:16, SourceIp:32, DestIp:32, Other/bit
 %%--------------------------------------------------------------------
 % show route
 route(show) ->
-  all_routing_table().
+  brook_routing_table:all_routing_table().
 
 %%--------------------------------------------------------------------
 % show route
@@ -123,8 +99,30 @@ route(add, static, #{dest_route := {D1, D2, D3, D4}, subnetmask := {S1, S2, S3, 
     age=0,
     out_interface=OutInterface
   },
-  set_to_routing_table(RoutingTable),
+  brook_routing_table:write_routing_table(RoutingTable),
   ok.
+
+%%--------------------------------------------------------------------
+%
+% trance to integer ip addr
+%
+trance_to_integer_ip_addr({I1, I2, I3, I4}) ->
+  <<Ip:?IP_LEN>> =  <<I1, I2, I3, I4>>,
+  Ip;
+trance_to_integer_ip_addr(_) ->
+  undefined.
+
+%%--------------------------------------------------------------------
+%
+% trance to tuple ip addr
+%
+trance_to_tuple_ip_addr(<<I1, I2, I3, I4>>) ->
+  {I1, I2, I3, I4};
+trance_to_tuple_ip_addr(Ip) when is_integer(Ip) ->
+  <<I1, I2, I3, I4>> = <<Ip:?IP_LEN>>,
+  {I1, I2, I3, I4};
+trance_to_tuple_ip_addr(_) ->
+  undefined.
 
 %%====================================================================
 %% Internal functions
@@ -148,7 +146,10 @@ receive_next_layer(<<Head:64, TTL, ?ICMP_PROTOCOL, Other/bitstring>>, Opt) ->
   brook_icmp:receive_packet(<<Head:64, (TTL-1), 1, Other/bitstring>>, Opt);
 
 receive_next_layer(<<Head:64, TTL, ?TCP_PROTOCOL, Other/bitstring>>=Data, Opt) ->
-  case brook_pipeline:before_tcp_pipeline(<<Head:64, (TTL-1), ?TCP_PROTOCOL, Other/bitstring>>, Opt) of
+  case brook_pipeline:before_tcp_pipeline(
+        <<Head:64, (TTL-1), ?TCP_PROTOCOL, Other/bitstring>>,
+        Opt
+      ) of
     {error, Msg} ->
       {error, Msg};
     {ok, ResData, ResOpt} ->
@@ -156,7 +157,10 @@ receive_next_layer(<<Head:64, TTL, ?TCP_PROTOCOL, Other/bitstring>>=Data, Opt) -
   end;
 
 receive_next_layer(<<Head:64, TTL, ?UDP_PROTOCOL, Other/bitstring>>=Data, Opt) ->
-  case brook_pipeline:before_udp_pipeline(<<Head:64, (TTL-1), ?UDP_PROTOCOL, Other/bitstring>>, Opt) of
+  case brook_pipeline:before_udp_pipeline(
+          <<Head:64, (TTL-1), ?UDP_PROTOCOL, Other/bitstring>>,
+          Opt
+        ) of
     {error, Msg} ->
       {error, Msg};
     {ok, ResData, ResOpt} ->
@@ -194,7 +198,7 @@ checksum(<<_>>, _) ->
 
 %%--------------------------------------------------------------------
 get_dest_route(DestIp) ->
-  Routes = all_routing_table(),
+  Routes = brook_routing_table:all_routing_table(),
   Match = match_dest_ip(Routes, DestIp, []),
   fetch_dest_route(Match, {}).
 
@@ -245,76 +249,4 @@ match_dest_ip([{_, _, _, Ip, _, Subnetmask, Ad, Metric, Nexthop, _, If}| Tail],
     _ ->
       match_dest_ip(Tail, DestIp, List)
   end.
-
-%%--------------------------------------------------------------------
-%
-% set direct routing table
-%
-set_direct_routing_table([], List) ->
-  List;
-set_direct_routing_table([{_, _, ?SELEF_IP, _, _, _}| Tail], List) ->
-  set_direct_routing_table(Tail, List);
-set_direct_routing_table([{_, _, IP, Netmask, _, _}| Tail], List)
-                        when IP =:= undefined; Netmask =:= undefind ->
-  set_direct_routing_table(Tail, List);
-set_direct_routing_table([{_, Name, Dest, Subnet, _, _}| Tail], List) ->
-  DestIp =  trance_to_integer_ip_addr(Dest),
-  Subnetmask = trance_to_integer_ip_addr(Subnet),
-  Mask = DestIp band Subnetmask,
-  set_to_routing_table(#routing_table{
-    source_route=?SOURCE_DIRECT,
-    dest_route=trance_to_tuple_ip_addr(Mask),
-    dest_route_int=Mask,
-    subnetmask=Subnet,
-    subnetmask_int=Subnetmask,
-    ad=0,
-    metric=0,
-    nexthop=?NEXTHOP_DIRECT,
-    age=0,
-    out_interface=Name
-  }),
-  set_direct_routing_table(Tail, List).
-
-%%--------------------------------------------------------------------
-%
-% set to routing table
-%
-set_to_routing_table(#routing_table{dest_route=Ip, subnetmask=Netmask})
-                    when Ip =:= undefined; Netmask =:= undefined ->
-  false;
-set_to_routing_table(#routing_table{dest_route=Ip, subnetmask=Netmask} = RoutingTable)
-                    when is_tuple(Ip), is_tuple(Netmask) ->
-  mnesia:transaction(fun() ->
-    mnesia:write(routing_table, RoutingTable, write)
-  end).
-
-%%--------------------------------------------------------------------
-%
-%  all routing table
-%
-all_routing_table() ->
-  mnesia:dirty_match_object(routing_table,
-    {'_', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9', '$10', '$11'}).
-
-%%--------------------------------------------------------------------
-%
-% trance to integer ip addr
-%
-trance_to_integer_ip_addr({I1, I2, I3, I4}) ->
-  <<Ip:?IP_LEN>> =  <<I1, I2, I3, I4>>,
-  Ip;
-trance_to_integer_ip_addr(_) ->
-  undefined.
-
-%%--------------------------------------------------------------------
-%
-% trance to tuple ip addr
-%
-trance_to_tuple_ip_addr(<<I1, I2, I3, I4>>) ->
-  {I1, I2, I3, I4};
-trance_to_tuple_ip_addr(Ip) when is_integer(Ip) ->
-  <<I1, I2, I3, I4>> = <<Ip:?IP_LEN>>,
-  {I1, I2, I3, I4};
-trance_to_tuple_ip_addr(_) ->
-  undefined.
 
