@@ -68,3 +68,6 @@ terminate(_Arg, _State) ->
 %% Internal functions
 %%====================================================================
 
+make_send_data(Data) ->
+  brook_ethernet:receive_packet(Buf).
+

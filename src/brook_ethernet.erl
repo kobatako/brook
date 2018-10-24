@@ -24,9 +24,9 @@ receive_packet(<<_:48, SourceMacAddr:48, Type:16, _/bitstring>>=Buf) ->
   <<S1, S2, S3, S4, S5, S6>> = <<SourceMacAddr:48>>,
   % where send packet
   % Sender himself
-  case brook_interface:match({interface, '$1', '$2', '$3', {S1, S2, S3, S4, S5, S6}, '_'}) of
+  case brook_interface:match_mac_addr({S1, S2, S3, S4, S5, S6}) of
     [] ->
-      ethernet_type(Type, Buf);
+      next_layer(Type, Buf);
     _ ->
       source_self_mac_address
   end.
@@ -39,7 +39,7 @@ send_packet(Data, #{if_name:=IfName, next_ip:=NextIp}=Opt) ->
   case brook_arp:get_mac_addr({IfName, NextIp}) of
     undefined ->
       brook_arp:request_arp(IfName, NextIp),
-      gen_server:cast(brook_arp_pooling, {save_pooling, {Data, IfName, NextIp}}),
+      brook_arp_pooling:save_pooling(Data, IfName, NextIp),
       false;
     DestMac when is_tuple(DestMac) ->
       brook_sender:send_packet(ip_request, {Data, Opt#{dest_mac=>tuple_to_list(DestMac)}});
@@ -67,14 +67,10 @@ trance_to_tuple_mac_addr(MacAddr) when is_integer(MacAddr) ->
 %
 % IP Protocol
 %
-ethernet_type(?TYPE_IP, <<DestMacAddr:48, SourceMacAddr:48, Type:16, Data/bitstring>>) ->
-  brook_arp:save_from_arp(<<DestMacAddr:48, SourceMacAddr:48, Type:16>>, Data),
-  Opt = #{recv =>#{
-          dest_mac_addr =>trance_to_tuple_mac_addr(DestMacAddr),
-          source_mac_addr => trance_to_tuple_mac_addr(SourceMacAddr),
-          type => Type
-  }},
-  case brook_pipeline:before_ip_pipeline(Data, Opt) of
+next_layer(?TYPE_IP, <<EthernetData:112, Data/bitstring>>) ->
+  brook_arp:save_from_arp(<<EthernetData:112>>, Data),
+  Opt1 = make_pipeline_option(<<EthernetData:112>>),
+  case brook_pipeline:before_ip_pipeline(Data, Opt1) of
     {error, Msg} ->
       {error, Msg};
     {ok, Data, Opt} ->
@@ -85,13 +81,24 @@ ethernet_type(?TYPE_IP, <<DestMacAddr:48, SourceMacAddr:48, Type:16, Data/bitstr
 %
 % ARP Protocol
 %
-ethernet_type(?TYPE_ARP, <<_:112, Data/bitstring>>) ->
+next_layer(?TYPE_ARP, <<_:112, Data/bitstring>>) ->
   brook_arp:packet(Data);
 
 %%--------------------------------------------------------------------
 %
 % not match Protocol
 %
-ethernet_type(_Type, _Data) ->
+next_layer(_Type, _Data) ->
   undefined.
+
+%%--------------------------------------------------------------------
+%
+% make pipeline option
+%
+make_pipeline_option(<<DestMacAddr:48, SourceMacAddr:48, Type:16>>) ->
+  #{recv =>#{
+    dest_mac_addr =>trance_to_tuple_mac_addr(DestMacAddr),
+    source_mac_addr => trance_to_tuple_mac_addr(SourceMacAddr),
+    type => Type
+  }}.
 

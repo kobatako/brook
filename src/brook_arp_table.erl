@@ -10,17 +10,37 @@
 -export([fetch_dest_ip_addr/2]).
 -export([fetch_dest_mac_addr/2]).
 
+%%====================================================================
+%% API
+%%====================================================================
+
+%%--------------------------------------------------------------------
+%
+% start_link
+%
 start_link() ->
   init().
 
+%%--------------------------------------------------------------------
+%
+% init
+%
 init() ->
   {atomic, ok} = mnesia:create_table(arp_table, [{attributes, record_info(fields, arp_table)}]).
 
+%%--------------------------------------------------------------------
+%
+% table
+%
 table() ->
   true.
 table(show) ->
   mnesia:dirty_match_object(arp_table, {'_', '$1', '$2', '$3', '$4'}).
 
+%%--------------------------------------------------------------------
+%
+% get_mac_addr
+%
 get_mac_addr({_, Nexthop}) ->
   case fetch_dest_ip_addr(Nexthop, false) of
     [] ->
@@ -91,7 +111,13 @@ fetch_arp_table(MatchHead, Result) ->
 % save arp table
 %
 save_arp_table(ArpTable) ->
-  mnesia:transaction(fun() ->
+  Func =  fun() ->
     mnesia:write(arp_table, ArpTable, write)
-  end).
+  end,
+  case mnesia:transaction(Func) of
+    {atomic, ResultOfFun} ->
+      true;
+    {aborted, Reason} ->
+      false
+  end.
 
