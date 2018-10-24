@@ -14,6 +14,9 @@
 -export([trance_to_integer_ip_addr/1]).
 -export([trance_to_tuple_ip_addr/1]).
 
+-type ip_address() :: {integer(), integer(), integer(), integer()}.
+-export_type([ip_address/0]).
+
 %%====================================================================
 %% API
 %%====================================================================

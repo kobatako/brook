@@ -11,6 +11,10 @@
 -export([match/1]).
 -export([match_network/1]).
 -export([match_ip_addr/1]).
+-export([match_mac_addr/1]).
+
+-type name() :: list().
+-export_type([name/0]).
 
 %%====================================================================
 %% API
@@ -35,6 +39,11 @@ match_network(Addr) ->
 match_ip_addr(Addr) ->
   mnesia:dirty_match_object(interface, {
     '_', '$1', Addr, '_', '_', '_'
+  }).
+
+match_mac_addr(MacAddr) ->
+  mnesia:dirty_match_object(interface, {
+    '_', '$1', '_', '_', MacAddr, '_'
   }).
 
 %%====================================================================

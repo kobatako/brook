@@ -22,16 +22,24 @@
 -export([handle_cast/2]).
 -export([handle_call/3]).
 
+-export([save_pooling/3]).
+
 %%====================================================================
 %% API
 %%====================================================================
 
+-spec start_link(integer()) -> {ok, pid()}.
 start_link(Timer) ->
   gen_server:start_link({local, ?MODULE}, ?MODULE, [Timer], []).
 
+-spec init([integer()]) -> {ok, []}.
 init([Timer]) ->
   spawn(fun() -> pooling(Timer) end),
   {ok, []}.
+
+-spec save_pooling(bitstring(), brook_interface:name(), brook_ip:ip_address()) -> term().
+save_pooling(Data, IfName, NextIp) ->
+  gen_server:cast(?MODULE, {save_pooling, {Data, IfName, NextIp}}).
 
 handle_info(_Message, Storage) ->
   {noreply, Storage}.
@@ -39,12 +47,12 @@ handle_info(_Message, Storage) ->
 terminate(_Message, _Storage) ->
   ok.
 
-handle_call(?MODULE, _, _) ->
-  true;
+-spec handle_call(term(), term(), term()) -> {reply, term(), term()}.
 handle_call({check}, _From, State) ->
   Res = check_pool_packet(State, []),
-  {reply, ok, Res}.
-
+  {reply, ok, Res};
+handle_call(?MODULE, _, State) ->
+  {reply, ok, State}.
 
 handle_cast({save_pooling, {Packet, IfName, Nexthop}}, State) ->
   {noreply, [

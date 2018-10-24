@@ -15,6 +15,7 @@
 -define(STATIC_TYPE, static).
 
 -include("arp.hrl").
+
 % arp option
 % response
 -define(OPTION_RESPONSE, 16#0002).
@@ -27,24 +28,41 @@
 -export([request_arp/2]).
 
 -type mac_address() :: {integer(), integer(), integer(), integer(), integer(), integer()}.
+-export_type([mac_address/0]).
 
 %%====================================================================
 %% API
 %%====================================================================
 
+%%--------------------------------------------------------------------
+%
+% init
+%
 -spec init() -> {atomic, ok}.
 init() ->
   brook_arp_table:start_link().
 
+%%--------------------------------------------------------------------
+%
+% table
+%
 -spec table() -> true.
 table() ->
   true.
 
+%%--------------------------------------------------------------------
+%
+% table show arp table
+%
 -spec table(show) -> list().
 table(Cont) ->
   brook_arp_table:table(Cont).
 
--spec get_mac_addr(tuple()) -> mac_address() | undefined.
+%%--------------------------------------------------------------------
+%
+% table show arp table
+%
+-spec get_mac_addr({brook_interface:name(), brook_ip:ip_address()}) -> mac_address() | undefined.
 get_mac_addr({_, Nexthop}) ->
   case brook_arp_table:fetch_dest_ip_addr(Nexthop, false) of
     [] ->
@@ -59,6 +77,7 @@ get_mac_addr({_, Nexthop}) ->
 %
 % arp response packet
 %
+-spec packet(bitstring()) ->  true | false.
 packet(<<?ETHERNET:16, _:16, _, _, ?OPTION_RESPONSE:16,
           SourceMacAddr:48, SourceIp:32,
           _:48, DestIp:32, _/bitstring>>) ->
@@ -78,6 +97,7 @@ packet(_) ->
 %
 % arp request
 %
+-spec request_arp(brook_interface:name(), brook_ip:ip_address()) -> false | ok.
 request_arp(If, Nexthop) ->
   case brook_interface:match({'_', If, '$1', '_', '$2', '_'}) of
     [] ->
@@ -98,6 +118,7 @@ request_arp(If, Nexthop) ->
 % save from arp
 % save the source ip as ip protocol and direct connected network interface
 %
+-spec save_from_arp(bitstring(), bitstring()) -> not_match | true | false.
 save_from_arp(
   <<_:48, SM1, SM2, SM3, SM4, SM5, SM6, _/bitstring>>,
   <<_:96, SourceAddr:32, _/bitstring>>
