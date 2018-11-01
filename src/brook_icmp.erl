@@ -9,12 +9,10 @@ receive_packet(
   <<Head:64, TTL, 1, Checksum:16, SourceIp:32, _Other/bitstring>>,
   Opt
 ) when TTL =< 0 ->
-  TypeCode = <<?TYPE_TIME_EXCEEDED, 0>>,
-  Checksum = checksum(TypeCode, 16#0000),
-  false;
+  {error, icmp_packet_ttl, {}};
 
 receive_packet(<<Data/bitstring>>, Opt) ->
-  brook_ip:send_packet(Data, Opt).
+  {ok, receive_packet, {data, Data}, {opt, Opt}}.
 
 
 %%====================================================================

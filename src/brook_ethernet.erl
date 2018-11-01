@@ -21,14 +21,14 @@
 % receive packet
 %
 receive_packet(<<_:48, SourceMacAddr:48, Type:16, _/bitstring>>=Buf) ->
-  <<S1, S2, S3, S4, S5, S6>> = <<SourceMacAddr:48>>,
+  Source = trance_to_tuple_mac_addr(SourceMacAddr),
   % where send packet
   % Sender himself
-  case brook_interface:match_mac_addr({S1, S2, S3, S4, S5, S6}) of
+  case brook_interface:match_mac_addr(Source) of
     [] ->
       next_layer(Type, Buf);
     _ ->
-      source_self_mac_address
+      {error, receive_packet_source_self_mac_address, {source_mac_addr, Source}}
   end.
 
 %%--------------------------------------------------------------------
@@ -40,12 +40,14 @@ send_packet(Data, #{if_name:=IfName, next_ip:=NextIp}=Opt) ->
     undefined ->
       brook_arp:request_arp(IfName, NextIp),
       brook_arp_pooling:save_pooling(Data, IfName, NextIp),
-      false;
+      {worng, undefined_arp_table, {{next_ip, NextIp}, {if_name, IfName}}};
     DestMac when is_tuple(DestMac) ->
-      brook_sender:send_packet(ip_request, {Data, Opt#{dest_mac=>tuple_to_list(DestMac)}});
+      {ok, ethernet_send_packet, {data, Data}, {opt, Opt#{dest_mac=>tuple_to_list(DestMac)}}};
     DestMac when is_list(DestMac) ->
-      brook_sender:send_packet(ip_request, {Data, Opt#{dest_mac=>DestMac}})
-  end.
+      {ok, ethernet_send_packet, {data, Data}, {opt, Opt#{dest_mac=>DestMac}}}
+  end;
+send_packet(Data, Opt) ->
+  {error, not_found_if_name_or_next_ip, {opt, Opt}}.
 
 %%--------------------------------------------------------------------
 %
@@ -72,9 +74,14 @@ next_layer(?TYPE_IP, <<EthernetData:112, Data/bitstring>>) ->
   Opt1 = make_pipeline_option(<<EthernetData:112>>),
   case brook_pipeline:before_ip_pipeline(Data, Opt1) of
     {error, Msg} ->
-      {error, Msg};
+      {error, ethernet_before_ip_pipeline, Msg};
     {ok, Data, Opt} ->
-      brook_ip:receive_packet(Data, Opt)
+      case brook_ip:receive_packet(Data, Opt) of
+        {ok, _, {data, Data0}, {opt, Opt0}} ->
+          send_packet(Data0, Opt0);
+        {error, _, _} = Err ->
+          Err
+      end
   end;
 
 %%--------------------------------------------------------------------
@@ -88,8 +95,8 @@ next_layer(?TYPE_ARP, <<_:112, Data/bitstring>>) ->
 %
 % not match Protocol
 %
-next_layer(_Type, _Data) ->
-  undefined.
+next_layer(Type, _Data) ->
+  {error, layer_3_undefined_type, {type, Type}}.
 
 %%--------------------------------------------------------------------
 %

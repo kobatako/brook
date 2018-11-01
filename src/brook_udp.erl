@@ -27,6 +27,6 @@ send_packet(Data, Opt) ->
     {error, Msg} ->
       {error, Msg};
     {ok, ResData, ResOpt} ->
-      brook_ip:send_packet(ResData, ResOpt)
+      {ok, after_udp_pipeline, {data, ResData}, {opt, ResOpt}}
   end.
 

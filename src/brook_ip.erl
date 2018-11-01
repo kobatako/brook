@@ -42,11 +42,11 @@ receive_packet(
       case brook_interface:match_ip_addr(Dest) of
         [] ->
           receive_next_layer(Data, Opt);
-        _ ->
-          false
+        Res ->
+          {error, match_to_ip_addr, {interface, Res}}
       end;
     _ ->
-      false
+      {error, response_packet_not_check_sum, {header_chech_sum, CheckSum}}
   end.
 
 check_sum_header(HeadLen, <<Head:80, _:16, Other/bitstring>>) ->
@@ -60,7 +60,7 @@ check_sum_header(HeadLen, <<Head:80, _:16, Other/bitstring>>) ->
 % send packet
 %
 send_packet(<<_:72, 0, _Other/bitstring>>, _) ->
-  not_send_packet;
+  {error, not_send_packet, {}};
 send_packet(<<Ver:4, HeadLen:4, Head:72, _:16, SourceIp:32, DestIp:32, Other/bitstring>>, Opt) ->
   Len = HeadLen * 4 * 8 - 96 - 64,
   <<Food:Len, _/bitstring>> = Other,
@@ -68,7 +68,7 @@ send_packet(<<Ver:4, HeadLen:4, Head:72, _:16, SourceIp:32, DestIp:32, Other/bit
   SendCheckSum = checksum(SendData, 16#0000),
   case get_dest_ip(DestIp) of
     not_found_dest_ip ->
-      false;
+      {error, not_found_dest_ip, {dest_ip, DestIp}};
     {IfName, NextIp} ->
       packet_after_filter(
         <<
@@ -140,13 +140,18 @@ packet_after_filter(Data, Opt) ->
     {error, Msg} ->
       {error, Msg};
     {ok, Data, ResOpt} ->
-      brook_ethernet:send_packet(Data, ResOpt)
+      {ok, packet_after_filter, {data, Data}, {opt, ResOpt}}
   end.
 
 % other ip
 % icmp protocol
-receive_next_layer(<<Head:64, TTL, ?ICMP_PROTOCOL, Other/bitstring>>, Opt) ->
-  brook_icmp:receive_packet(<<Head:64, (TTL-1), 1, Other/bitstring>>, Opt);
+receive_next_layer(<<Head:64, TTL, ?ICMP_PROTOCOL, Other/bitstring>>, Opt0) ->
+  case brook_icmp:receive_packet(<<Head:64, (TTL-1), 1, Other/bitstring>>, Opt0) of
+    {ok, _, {data, Data}, {opt, Opt}} ->
+      brook_ip:send_packet(Data, Opt);
+    {error, _, _} = Err ->
+      Err
+  end;
 
 receive_next_layer(<<Head:64, TTL, ?TCP_PROTOCOL, Other/bitstring>>=Data, Opt) ->
   case brook_pipeline:before_tcp_pipeline(
@@ -154,9 +159,14 @@ receive_next_layer(<<Head:64, TTL, ?TCP_PROTOCOL, Other/bitstring>>=Data, Opt) -
         Opt
       ) of
     {error, Msg} ->
-      {error, Msg};
-    {ok, ResData, ResOpt} ->
-      brook_tcp:receive_packet(ResData, ResOpt)
+      {error, before_tcp_pipeline, Msg};
+    {ok, ResData0, ResOpt0} ->
+      case brook_tcp:receive_packet(ResData0, ResOpt0) of
+        {ok, _, {data, ResData}, {opt, ResOpt}} ->
+          send_packet(ResData, ResOpt);
+        {error, _, _} = Err ->
+          Err
+      end
   end;
 
 receive_next_layer(<<Head:64, TTL, ?UDP_PROTOCOL, Other/bitstring>>=Data, Opt) ->
@@ -165,7 +175,7 @@ receive_next_layer(<<Head:64, TTL, ?UDP_PROTOCOL, Other/bitstring>>=Data, Opt) -
           Opt
         ) of
     {error, Msg} ->
-      {error, Msg};
+      {error, before_udp_pipeline, Msg};
     {ok, ResData, ResOpt} ->
       brook_udp:receive_packet(ResData, ResOpt)
   end;
