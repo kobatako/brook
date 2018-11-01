@@ -52,7 +52,16 @@ loop(FD) ->
 %%--------------------------------------------------------------------
 % handle event
 handle_event(Buf, Fd) ->
-  brook_ethernet:receive_packet(Buf),
+  case brook_ethernet:receive_packet(Buf) of
+    {ok, _, {data, Data}, {opt, Opt}} ->
+      brook_sender:send_packet(ip_request, {Data, Opt});
+    {worng, _, _} = Worng ->
+      Worng;
+    {error, _, _} = Err ->
+      Err;
+    Res ->
+      Res
+  end,
   {ok, Fd}.
 
 %%--------------------------------------------------------------------
@@ -67,7 +76,4 @@ terminate(_Arg, _State) ->
 %%====================================================================
 %% Internal functions
 %%====================================================================
-
-make_send_data(Data) ->
-  brook_ethernet:receive_packet(Buf).
 

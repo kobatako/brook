@@ -26,9 +26,8 @@ receive_packet(Data, Opt) ->
 send_packet(Data, Opt) ->
   case brook_pipeline:after_tcp_pipeline(Data, Opt) of
     {error, Msg} ->
-      {error, Msg};
+      {error, after_tcp_pipeline, Msg};
     {ok, ResData, ResOpt} ->
-      brook_ip:send_packet(ResData, ResOpt)
+      {ok, after_tcp_pipeline, {data, ResData}, {opt, ResOpt}}
   end.
-
 
