@@ -153,7 +153,7 @@ receive_next_layer(<<Head:64, TTL, ?ICMP_PROTOCOL, Other/bitstring>>, Opt0) ->
       Err
   end;
 
-receive_next_layer(<<Head:64, TTL, ?TCP_PROTOCOL, Other/bitstring>>=Data, Opt) ->
+receive_next_layer(<<Head:64, TTL, ?TCP_PROTOCOL, Other/bitstring>>, Opt) ->
   case brook_pipeline:before_tcp_pipeline(
         <<Head:64, (TTL-1), ?TCP_PROTOCOL, Other/bitstring>>,
         Opt
@@ -169,7 +169,7 @@ receive_next_layer(<<Head:64, TTL, ?TCP_PROTOCOL, Other/bitstring>>=Data, Opt) -
       end
   end;
 
-receive_next_layer(<<Head:64, TTL, ?UDP_PROTOCOL, Other/bitstring>>=Data, Opt) ->
+receive_next_layer(<<Head:64, TTL, ?UDP_PROTOCOL, Other/bitstring>>, Opt) ->
   case brook_pipeline:before_udp_pipeline(
           <<Head:64, (TTL-1), ?UDP_PROTOCOL, Other/bitstring>>,
           Opt
