@@ -250,15 +250,15 @@ after_udp_pipeline(Data, Opt) ->
 %
 pipeline([], Data, Opt) ->
   {ok, Data, Opt};
-pipeline([#pipeline{module=undefined, func=Func}| Tail], Data, Opt) ->
-  case apply(Func, [Data, Opt]) of
+pipeline([#pipeline{module=undefined, func=Func}| Tail], Data0, Opt0) ->
+  case apply(Func, [Data0, Opt0]) of
     {error, Msg} ->
       {error, Msg};
     {ok, Data, Opt} ->
       pipeline(Tail, Data, Opt)
   end;
-pipeline([#pipeline{module=Module, func=Func}| Tail], Data, Opt) ->
-  case apply(Module, Func, [Data, Opt]) of
+pipeline([#pipeline{module=Module, func=Func}| Tail], Data0, Opt0) ->
+  case apply(Module, Func, [Data0, Opt0]) of
     {error, Msg} ->
       {error, Msg};
     {ok, Data, Opt} ->
