@@ -40,7 +40,7 @@ send_packet(Data, #{if_name:=IfName, next_ip:=NextIp}=Opt) ->
     undefined ->
       brook_arp:request_arp(IfName, NextIp),
       brook_arp_pooling:save_pooling(Data, IfName, NextIp),
-      {worng, undefined_arp_table, {{next_ip, NextIp}, {if_name, IfName}}};
+      {ok, undefined_arp_table, {{next_ip, NextIp}, {if_name, IfName}}};
     DestMac when is_tuple(DestMac) ->
       {ok, ethernet_send_packet, {data, Data}, {opt, Opt#{dest_mac=>tuple_to_list(DestMac)}}};
     DestMac when is_list(DestMac) ->
@@ -96,7 +96,7 @@ next_layer(?TYPE_ARP, <<_:112, Data/bitstring>>) ->
 % not match Protocol
 %
 next_layer(Type, _Data) ->
-  {error, layer_3_undefined_type, {type, Type}}.
+  {error, ethernet_undefined_type, {type, Type}}.
 
 %%--------------------------------------------------------------------
 %

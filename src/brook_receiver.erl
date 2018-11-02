@@ -55,8 +55,8 @@ handle_event(Buf, Fd) ->
   case brook_ethernet:receive_packet(Buf) of
     {ok, _, {data, Data}, {opt, Opt}} ->
       brook_sender:send_packet(ip_request, {Data, Opt});
-    {worng, _, _} = Worng ->
-      Worng;
+    {ok, _, _} = Ok ->
+      Ok;
     {error, _, _} = Err ->
       Err;
     Res ->
