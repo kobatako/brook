@@ -70,7 +70,7 @@ trance_to_tuple_mac_addr(MacAddr) when is_integer(MacAddr) ->
 % IP Protocol
 %
 next_layer(?TYPE_IP, <<EthernetData:112, Data1/bitstring>>) ->
-  brook_arp:save_from_arp(<<EthernetData:112>>, Data),
+  brook_arp:save_from_arp(<<EthernetData:112>>, Data1),
   Opt1 = make_pipeline_option(<<EthernetData:112>>),
   case brook_pipeline:before_ip_pipeline(Data1, Opt1) of
     {error, Msg} ->
