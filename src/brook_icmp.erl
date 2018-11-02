@@ -6,8 +6,8 @@
 
 % time out exceeded
 receive_packet(
-  <<Head:64, TTL, 1, Checksum:16, SourceIp:32, _Other/bitstring>>,
-  Opt
+  <<_Head:64, TTL, 1, _Checksum:16, _SourceIp:32, _Other/bitstring>>,
+  _Opt
 ) when TTL =< 0 ->
   {error, icmp_packet_ttl, {}};
 
