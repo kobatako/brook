@@ -10,6 +10,7 @@
 
 -export([start_link/0]).
 -export([write_routing_table/1]).
+-export([routing_table/1]).
 -export([all_routing_table/0]).
 -export([set_direct_routing_table/2]).
 
@@ -53,6 +54,9 @@ all_routing_table() ->
   mnesia:dirty_match_object(routing_table,
     {'_', '$2', '$3', '$4', '$5', '$6', '$7', '$8', '$9', '$10', '$11'}).
 
+routing_table(SourceRoute) ->
+  mnesia:dirty_match_object(routing_table,
+    {'_', SourceRoute, '$3', '$4', '$5', '$6', '$7', '$8', '$9', '$10', '$11'}).
 
 set_direct_routing_table([], List) ->
   List;
