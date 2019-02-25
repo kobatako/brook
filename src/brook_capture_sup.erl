@@ -48,7 +48,7 @@ init([FD]) ->
         modules => [brook_receiver]
       },
       #{id => brook_arp_pooling,
-        start => {brook_arp_pooling, start_link, [[10]]},
+        start => {brook_arp_pooling, start_link, [10]},
         restart => permanent,
         shutdown => brutal_kill,
         type => worker,
