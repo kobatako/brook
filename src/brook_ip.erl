@@ -8,7 +8,7 @@
 -include("ip.hrl").
 
 -export([init/0]).
--export([route/1, route/3]).
+-export([route/1, route/3, route/2, route/6]).
 -export([receive_packet/2]).
 -export([send_packet/2]).
 -export([trance_to_integer_ip_addr/1]).
@@ -81,13 +81,36 @@ send_packet(<<Ver:4, HeadLen:4, Head:72, _:16, SourceIp:32, DestIp:32, Other/bit
 
 %%--------------------------------------------------------------------
 % show route
+-spec route(atom()) -> list().
 route(show) ->
-  brook_routing_table:all_routing_table().
+  brook_routing_table:all_routing_table();
+
+route(_) ->
+  {error, not_match_control}.
 
 %%--------------------------------------------------------------------
-% show route
+% show route, source route
+-spec route(atom(), atom()) -> list().
+% show route, source static
+route(show, static) ->
+  brook_routing_table:routing_table(?SOURCE_STATIC);
+route(show, ?SOURCE_STATIC) ->
+  brook_routing_table:routing_table(?SOURCE_STATIC);
+
+% show route, source connect
+route(show, connect) ->
+  brook_routing_table:routing_table(?SOURCE_DIRECT);
+route(show, ?SOURCE_DIRECT) ->
+  brook_routing_table:routing_table(?SOURCE_DIRECT);
+
+route(_, _) ->
+  {error, not_match_control}.
+
+%%--------------------------------------------------------------------
+% add static route
+-spec route(atom(), atom(), map()) -> atom() | tuple().
 route(add, static, #{dest_route := {D1, D2, D3, D4}, subnetmask := {S1, S2, S3, S4},
-      nexthop := Nexthop, out_interface := OutInterface}) ->
+      nexthop := {_, _, _, _}=Nexthop, out_interface := OutInterface}) ->
   <<DestRoute:?IP_LEN>> = <<D1, D2, D3, D4>>,
   <<Subnetmask:?IP_LEN>> = <<S1, S2, S3, S4>>,
   RoutingTable = #routing_table{
@@ -103,7 +126,46 @@ route(add, static, #{dest_route := {D1, D2, D3, D4}, subnetmask := {S1, S2, S3, 
     out_interface=OutInterface
   },
   brook_routing_table:write_routing_table(RoutingTable),
-  ok.
+  ok;
+
+route(add, static, _) ->
+  {error, not_match_add_static_route};
+
+route(add, _, _) ->
+  {error, not_match_static_route};
+
+route(_, _, _) ->
+  {error, not_match_control}.
+
+
+% add static route
+-spec route(atom(), atom(), tuple(), tuple(), tuple(), string()) -> atom() | tuple().
+route(add, static, {D1, D2, D3, D4}, {S1, S2, S3, S4}, {_, _, _, _}=Nexthop, OutInterface) ->
+  <<DestRoute:?IP_LEN>> = <<D1, D2, D3, D4>>,
+  <<Subnetmask:?IP_LEN>> = <<S1, S2, S3, S4>>,
+  RoutingTable = #routing_table{
+    source_route=?SOURCE_STATIC,
+    dest_route={D1, D2, D3, D4},
+    dest_route_int=DestRoute,
+    subnetmask={S1, S2, S3, S4},
+    subnetmask_int=Subnetmask,
+    ad=1,
+    metric=0,
+    nexthop=Nexthop,
+    age=0,
+    out_interface=OutInterface
+  },
+  brook_routing_table:write_routing_table(RoutingTable),
+  ok;
+
+route(add, static, _, _, _, _) ->
+  {error, not_match_add_static_route};
+
+route(add, _, _, _, _, _) ->
+  {error, not_match_static_route};
+
+route(_, _, _, _, _, _) ->
+  {error, not_match_control}.
 
 %%--------------------------------------------------------------------
 %

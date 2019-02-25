@@ -1,14 +1,14 @@
 -record(routing_table, {
-  source_route,       % routing learn source
-  dest_route,         % destination route
-  dest_route_int,     % destination route integer
-  subnetmask,         % subnet mask ( number )
-  subnetmask_int,     % subnet mask ( number )
-  ad,                 % administrative distancec
-  metric,             % metric
-  nexthop,            % next hop ip
-  age,                % destination route learng time
-  out_interface       % out put interface
+  source_route :: atom(),       % routing learn source
+  dest_route :: tuple(),        % destination route
+  dest_route_int :: integer(),  % destination route integer
+  subnetmask :: tuple(),        % subnet mask ( number )
+  subnetmask_int :: integer(),  % subnet mask ( number )
+  ad :: integer(),              % administrative distance
+  metric :: integer(),          % metric
+  nexthop :: tuple() | atom(),  % next hop ip
+  age :: integer(),             % destination route learng time
+  out_interface :: string()     % out put interface
 }).
 
 % source route type
