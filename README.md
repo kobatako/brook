@@ -17,8 +17,11 @@ You can implement basic routing and also configure static routing.
 add static route
 
 destination ip : {192, 168, 30, 0}
+
 destination subnetmask : {255, 255, 255, 0}
+
 next hop ip : {255, 255, 255, 0}
+
 out interface : "eth1"
 
 ```
